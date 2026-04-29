@@ -1,13 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/constants.dart';
 import '../../data/datasources/app_database.dart';
 import '../../data/datasources/local_scripture_source.dart';
 import '../../data/datasources/open_scripture_api.dart';
+import '../../data/repositories/note_repository_impl.dart';
+import '../../data/repositories/project_repository_impl.dart';
 import '../../data/repositories/scripture_repository_impl.dart';
-import '../../data/repositories/study_project_repository_impl.dart';
 import '../../domain/entities/scripture.dart';
 import '../../domain/entities/study_project.dart';
+import '../../domain/repositories/note_repository.dart';
+import '../../domain/repositories/project_repository.dart';
 import '../../domain/repositories/scripture_repository.dart';
-import '../../domain/repositories/study_project_repository.dart';
 
 // ── Infrastructure singletons ───────────────────────────────────────────
 
@@ -18,7 +21,7 @@ final openScriptureApiProvider =
 
 final localScriptureSourceProvider = Provider<LocalScriptureSource>(
   (ref) => const LocalScriptureSource(
-    basePath: r'***REMOVED***',
+    basePath: LocalScriptureConfig.basePath,
   ),
 );
 
@@ -31,9 +34,12 @@ final scriptureRepositoryProvider = Provider<ScriptureRepository>((ref) {
   );
 });
 
-final studyProjectRepositoryProvider =
-    Provider<StudyProjectRepository>((ref) {
-  return StudyProjectRepositoryImpl(db: ref.watch(appDatabaseProvider));
+final projectRepositoryProvider = Provider<ProjectRepository>((ref) {
+  return ProjectRepositoryImpl(db: ref.watch(appDatabaseProvider));
+});
+
+final noteRepositoryProvider = Provider<NoteRepository>((ref) {
+  return NoteRepositoryImpl(db: ref.watch(appDatabaseProvider));
 });
 
 // ── Study Projects ──────────────────────────────────────────────────────
@@ -46,18 +52,18 @@ final studyProjectsProvider =
 class StudyProjectsNotifier extends AsyncNotifier<List<StudyProject>> {
   @override
   Future<List<StudyProject>> build() async {
-    return ref.read(studyProjectRepositoryProvider).getAllProjects();
+    return ref.read(projectRepositoryProvider).getAll();
   }
 
   Future<StudyProject> create(String name, {String? description}) async {
-    final repo = ref.read(studyProjectRepositoryProvider);
-    final project = await repo.createProject(name, description: description);
+    final repo = ref.read(projectRepositoryProvider);
+    final project = await repo.create(name, description: description);
     ref.invalidateSelf();
     return project;
   }
 
   Future<void> delete(String projectId) async {
-    await ref.read(studyProjectRepositoryProvider).deleteProject(projectId);
+    await ref.read(projectRepositoryProvider).delete(projectId);
     ref.invalidateSelf();
   }
 
@@ -69,7 +75,7 @@ class StudyProjectsNotifier extends AsyncNotifier<List<StudyProject>> {
       lastOpenedAt: DateTime.now(),
       lastPosition: position,
     );
-    await ref.read(studyProjectRepositoryProvider).updateProject(updated);
+    await ref.read(projectRepositoryProvider).update(updated);
     ref.invalidateSelf();
   }
 }
@@ -148,11 +154,11 @@ class ChapterNotesParams {
 
 final chapterNotesProvider =
     FutureProvider.family<List<StudyNote>, ChapterNotesParams>((ref, params) {
-  return ref.read(studyProjectRepositoryProvider).getNotes(
+  return ref.read(noteRepositoryProvider).getForChapter(
         params.projectId,
-        volume: params.volume,
-        bookApiId: params.bookApiId,
-        chapter: params.chapter,
+        params.volume,
+        params.bookApiId,
+        params.chapter,
       );
 });
 

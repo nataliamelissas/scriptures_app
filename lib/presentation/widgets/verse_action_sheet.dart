@@ -39,8 +39,8 @@ class _VerseActionSheetState extends ConsumerState<VerseActionSheet> {
   }
 
   Future<void> _addHighlight(Color color) async {
-    final repo = ref.read(studyProjectRepositoryProvider);
-    await repo.createNote(StudyNote(
+    final repo = ref.read(noteRepositoryProvider);
+    await repo.create(StudyNote(
       id: '',
       projectId: widget.projectId,
       volume: widget.volume,
@@ -56,8 +56,8 @@ class _VerseActionSheetState extends ConsumerState<VerseActionSheet> {
   }
 
   Future<void> _addBookmark() async {
-    final repo = ref.read(studyProjectRepositoryProvider);
-    await repo.createNote(StudyNote(
+    final repo = ref.read(noteRepositoryProvider);
+    await repo.create(StudyNote(
       id: '',
       projectId: widget.projectId,
       volume: widget.volume,
@@ -73,8 +73,8 @@ class _VerseActionSheetState extends ConsumerState<VerseActionSheet> {
 
   Future<void> _addNote() async {
     if (_noteController.text.trim().isEmpty) return;
-    final repo = ref.read(studyProjectRepositoryProvider);
-    await repo.createNote(StudyNote(
+    final repo = ref.read(noteRepositoryProvider);
+    await repo.create(StudyNote(
       id: '',
       projectId: widget.projectId,
       volume: widget.volume,

@@ -106,9 +106,9 @@ class LocalScriptureSource {
 
   Directory _resolveBookDir(StandardWork volume, String bookTitle) {
     if (volume == StandardWork.doctrineAndCovenants) {
-      // D&C: "Doctrine and Covenants/Doctrine and Covenants/"
+      // D&C: sections are nested under a subfolder with the same name as the volume
       return Directory(
-          p.join(basePath, volume.folderName, 'Doctrine and Covenants'));
+          p.join(basePath, volume.folderName, volume.folderName));
     }
     return Directory(p.join(basePath, volume.folderName, bookTitle));
   }

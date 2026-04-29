@@ -43,11 +43,13 @@ class ReadingPosition {
   final StandardWork volume;
   final String bookApiId;
   final int chapter;
+  final int? verseNumber;
 
   const ReadingPosition({
     required this.volume,
     required this.bookApiId,
     required this.chapter,
+    this.verseNumber,
   });
 }
 

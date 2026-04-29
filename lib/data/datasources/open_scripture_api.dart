@@ -1,21 +1,20 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../core/constants.dart';
 import '../../domain/entities/scripture.dart';
 
 /// Client for https://openscriptureapi.org
 /// Base URL: /api/scriptures/v1/lds/en
 class OpenScriptureApi {
-  static const _baseUrl =
-      'https://openscriptureapi.org/api/scriptures/v1/lds/en';
-
   final http.Client _client;
 
   OpenScriptureApi({http.Client? client}) : _client = client ?? http.Client();
 
   /// GET /volume/{volumeId} -> { books: [{ _id, title }] }
   Future<List<ScriptureBook>> fetchBooks(StandardWork volume) async {
-    final url = Uri.parse('$_baseUrl/volume/${volume.apiVolumeId}');
-    final response = await _client.get(url).timeout(const Duration(seconds: 15));
+    final url = Uri.parse('${ApiConfig.baseUrl}/volume/${volume.apiVolumeId}');
+    final response = await _client.get(url).timeout(
+        const Duration(seconds: ApiConfig.timeoutSeconds));
 
     if (response.statusCode != 200) {
       throw ApiException('Failed to fetch books: ${response.statusCode}');
@@ -42,9 +41,10 @@ class OpenScriptureApi {
     int chapterNumber,
   ) async {
     final url = Uri.parse(
-      '$_baseUrl/volume/${volume.apiVolumeId}/$bookApiId/$chapterNumber',
+      '${ApiConfig.baseUrl}/volume/${volume.apiVolumeId}/$bookApiId/$chapterNumber',
     );
-    final response = await _client.get(url).timeout(const Duration(seconds: 15));
+    final response = await _client.get(url).timeout(
+        const Duration(seconds: ApiConfig.timeoutSeconds));
 
     if (response.statusCode != 200) {
       throw ApiException('Failed to fetch chapter: ${response.statusCode}');
