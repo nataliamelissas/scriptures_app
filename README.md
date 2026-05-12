@@ -88,6 +88,81 @@ If you later want OPFS performance and have resolved OAuth compatibility, add:
 npx wrangler deploy
 ```
 
+## Cloudflare Worker: Scripture API CORS Proxy
+
+`openscriptureapi.org` returns valid responses but no `Access-Control-Allow-Origin` header, so browsers block them. Native (Android/iOS/desktop) platforms are unaffected. To fix web, scripture API traffic is routed through a Cloudflare Worker that re-emits the response with permissive CORS headers.
+
+Source lives in [`workers/scripture-proxy/`](workers/scripture-proxy):
+
+| File | Purpose |
+|------|---------|
+| `index.js` | Worker entry point. Handles `OPTIONS` preflight and forwards `GET` requests to `openscriptureapi.org`, attaching `Access-Control-Allow-Origin: *`. |
+| `wrangler.jsonc` | Wrangler config. `name` controls the deployed subdomain (`scripture-proxy.<account>.workers.dev`). |
+
+### Platform routing
+
+[`lib/core/constants.dart`](lib/core/constants.dart) exposes `ApiConfig.baseUrl` as a `static get` that switches on `kIsWeb`:
+
+- **Web** → Worker URL (`https://scripture-proxy.<account>.workers.dev/...`)
+- **Android / iOS / desktop** → direct (`https://openscriptureapi.org/...`)
+
+If you fork this repo, update `_proxyUrl` in `constants.dart` to point at your own deployed Worker.
+
+### Deploy
+
+One-time setup:
+
+```bash
+npm install -g wrangler
+wrangler login
+```
+
+Deploy (from repo root):
+
+```bash
+cd workers/scripture-proxy
+wrangler deploy
+```
+
+The first deploy prints the public Worker URL. Subsequent deploys reuse it.
+
+### Gitignored Worker artifacts
+
+- `.wrangler/` — local Wrangler cache, contains your Cloudflare account id/email. **Never commit.**
+- `workers/**/node_modules/` — if you add npm deps to the Worker.
+
+Both are already in `.gitignore`.
+
+## Firebase
+
+`firebase_core` is wired up as the foundation for future Auth, Firestore sync, and Storage features. No Firebase products are used at runtime yet beyond initialization.
+
+### Configuration
+
+Platform setup is managed by the FlutterFire CLI — do **not** hand-edit generated files.
+
+```bash
+dart pub global activate flutterfire_cli
+flutterfire configure
+```
+
+This (re)generates:
+
+- `lib/firebase_options.dart` — non-secret platform identifiers. **Committed** to the repo so fresh clones work.
+- `android/app/google-services.json`, `ios/Runner/GoogleService-Info.plist`, `macos/Runner/GoogleService-Info.plist` — platform config files. **Gitignored** by convention; each developer regenerates them via `flutterfire configure`.
+
+Re-run `flutterfire configure` whenever you add a new Firebase service or platform.
+
+### New dependencies
+
+Added in `pubspec.yaml`:
+
+| Package | Purpose |
+|---------|---------|
+| `firebase_core` | Initializes the Firebase SDK. Required by every other Firebase package. |
+
+Future additions (not yet installed): `firebase_auth`, `cloud_firestore`, `firebase_storage`.
+
 ## Architecture
 
 See [CLAUDE.md](CLAUDE.md) for architecture details, conventions, and common commands.
