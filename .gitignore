@@ -43,3 +43,12 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Wrangler (Cloudflare Workers) local cache — contains account info
+.wrangler/
+workers/**/node_modules/
+
+# Firebase platform config (contains project identifiers; safe but conventionally untracked)
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+macos/Runner/GoogleService-Info.plist
