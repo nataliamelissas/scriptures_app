@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/study_project.dart';
 import '../providers/providers.dart';
+import 'archived_projects_screen.dart';
+import 'books_screen.dart';
+import 'reader_screen.dart';
 import 'volumes_screen.dart';
 
 /// Home screen: lists the user's study projects.
@@ -15,6 +18,18 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.inventory_2_outlined),
+          tooltip: 'Archive',
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const ArchivedProjectsScreen(),
+              ),
+            );
+          },
+        ),
         title: const Text('My Study Projects'),
       ),
       body: projectsAsync.when(
@@ -160,15 +175,7 @@ class _ProjectList extends ConsumerWidget {
         return Card(
           child: InkWell(
             borderRadius: BorderRadius.circular(14),
-            onTap: () {
-              ref.read(selectedProjectProvider.notifier).state = project;
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => VolumesScreen(project: project),
-                ),
-              );
-            },
+            onTap: () => _openProject(context, ref, project),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -203,7 +210,7 @@ class _ProjectList extends ConsumerWidget {
                         const SizedBox(height: 4),
                         Text(
                           project.lastPosition != null
-                              ? 'Reading: ${project.lastPosition!.bookApiId} ${project.lastPosition!.chapter}'
+                              ? 'Reading: ${project.lastPosition!.bookTitle} ${project.lastPosition!.chapter}'
                               : 'Not started',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.primary,
@@ -214,12 +221,27 @@ class _ProjectList extends ConsumerWidget {
                   ),
                   PopupMenuButton<String>(
                     onSelected: (value) {
-                      if (value == 'delete') {
-                        _confirmDelete(context, ref, project);
+                      switch (value) {
+                        case 'settings':
+                          _openSettings(context, ref, project);
+                        case 'archive':
+                          ref
+                              .read(studyProjectsProvider.notifier)
+                              .setArchived(project.id, true);
+                        case 'delete':
+                          _confirmDelete(context, ref, project);
                       }
                     },
-                    itemBuilder: (_) => [
-                      const PopupMenuItem(
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: 'settings',
+                        child: Text('Settings'),
+                      ),
+                      PopupMenuItem(
+                        value: 'archive',
+                        child: Text('Archive'),
+                      ),
+                      PopupMenuItem(
                         value: 'delete',
                         child: Text('Delete'),
                       ),
@@ -231,6 +253,61 @@ class _ProjectList extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+
+  /// Open a project tile: resume reading where the user left off, or — if
+  /// they never started — open the books list for the project's default
+  /// volume. We never route through the Standard Works picker here; that
+  /// lives behind the per-project Settings menu.
+  void _openProject(BuildContext context, WidgetRef ref, StudyProject project) {
+    ref.read(selectedProjectProvider.notifier).state = project;
+    final pos = project.lastPosition;
+    if (pos != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ReaderScreen(
+            project: project,
+            volume: pos.volume,
+            bookApiId: pos.bookApiId,
+            bookTitle: pos.bookTitle,
+            initialChapter: pos.chapter,
+            initialVerse: pos.verseNumber,
+          ),
+        ),
+      );
+      return;
+    }
+    final volume = project.defaultVolume;
+    if (volume != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BooksScreen(project: project, volume: volume),
+        ),
+      );
+      return;
+    }
+    // Fallback: no position and no default volume — send them through the
+    // volume picker as if completing setup.
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => VolumesScreen(
+          project: project,
+          isInitialSetup: true,
+        ),
+      ),
+    );
+  }
+
+  void _openSettings(BuildContext context, WidgetRef ref, StudyProject project) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => VolumesScreen(project: project),
+      ),
     );
   }
 
