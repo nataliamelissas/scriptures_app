@@ -44,6 +44,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   Timer? _saveDebounce;
   bool _pendingScrollToVerse = false;
 
+  /// True while we're auto-scrolling to restore a saved verse. During this
+  /// window, programmatic scroll events would otherwise call
+  /// `_recomputeTopVerse` against an unsettled layout and clobber the
+  /// correct verse with a transient one (e.g. verse 1).
+  bool _inRestoration = false;
+
   /// Captured during initState. Notifiers live in the ProviderContainer and
   /// outlive the widget, so we can use this reference safely from dispose,
   /// post-frame callbacks, and debounce timers — none of which can safely
@@ -57,6 +63,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     _currentChapter = widget.initialChapter;
     _initialVerse = widget.initialVerse;
     _pendingScrollToVerse = _initialVerse != null && _initialVerse! > 1;
+    // Seed _topVerse with the restored verse so that even if the user
+    // exits before any scroll fires, the dispose-time save writes the
+    // correct verse instead of null.
+    _topVerse = _initialVerse;
+    _inRestoration = _pendingScrollToVerse;
     _projectsNotifier = ref.read(studyProjectsProvider.notifier);
     _scrollController.addListener(_onScroll);
     _saveReadingPosition();
@@ -75,6 +86,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   void _onScroll() {
+    // Ignore scroll events fired by our own jumpTo / ensureVisible while
+    // restoring — layout hasn't settled, so we'd save a wrong verse.
+    if (_inRestoration) return;
     _recomputeTopVerse();
   }
 
@@ -144,6 +158,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       _verseKeys.clear();
       _initialVerse = null;
       _pendingScrollToVerse = false;
+      _inRestoration = false;
     });
     _scrollController.jumpTo(0);
     _saveReadingPosition();
@@ -156,10 +171,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   /// built yet — we jump to an estimated offset to bring it into the build
   /// region, then a later frame will fine-tune with `ensureVisible`.
   void _maybeScrollToInitialVerse(int totalVerses) {
-    if (!_pendingScrollToVerse) return;
+    if (!_pendingScrollToVerse) {
+      _finishRestoration();
+      return;
+    }
     final verse = _initialVerse;
     if (verse == null || verse <= 1) {
       _pendingScrollToVerse = false;
+      _finishRestoration();
       return;
     }
     final key = _verseKeys[verse];
@@ -171,6 +190,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         duration: Duration.zero,
         alignment: 0,
       );
+      _finishRestoration();
       return;
     }
     if (!_scrollController.hasClients) return;
@@ -181,6 +201,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         ((verse - 1) / totalVerses * maxScroll).clamp(0.0, maxScroll);
     _scrollController.jumpTo(estimated);
     // Keep _pendingScrollToVerse = true; next frame will retry and refine.
+  }
+
+  /// Wait one frame after the final restoration scroll so layout settles,
+  /// then re-enable user-scroll tracking.
+  void _finishRestoration() {
+    if (!_inRestoration) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _inRestoration = false;
+    });
   }
 
   @override
@@ -234,12 +263,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             notesByVerse.putIfAbsent(note.verseNumber, () => []).add(note);
           }
 
-          // After this frame paints, resolve the top verse and (optionally)
-          // scroll the user back to where they left off.
+          // After this frame paints, run the restoration scroll (if any).
+          // We deliberately do NOT call _recomputeTopVerse here — _topVerse
+          // is already seeded from the saved position, and recomputing
+          // against a layout that's mid-restoration would clobber it with
+          // a transient value.
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
             _maybeScrollToInitialVerse(chapter.verses.length);
-            _recomputeTopVerse();
           });
 
           return Column(
