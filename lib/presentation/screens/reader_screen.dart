@@ -58,26 +58,25 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _saveDebounce?.cancel();
-    // Flush one final save with the latest top verse.
-    _recomputeTopVerse();
-    _saveReadingPosition();
+    // Best-effort final save: write directly to the repository instead of
+    // going through the notifier. The notifier's invalidateSelf() would
+    // notify listeners (including widgets that are also being torn down
+    // along this navigation pop) and trip `markNeedsBuild` on disposed
+    // elements. A direct repo write has no such side effects.
+    _saveDirectlyOnDispose();
     _scrollController.dispose();
     super.dispose();
   }
 
   void _onScroll() {
     _recomputeTopVerse();
-    _saveDebounce?.cancel();
-    _saveDebounce = Timer(const Duration(milliseconds: 800), () {
-      if (mounted) _saveReadingPosition();
-    });
   }
 
   void _recomputeTopVerse() {
     final listCtx = _listKey.currentContext;
     if (listCtx == null) return;
     final listBox = listCtx.findRenderObject() as RenderBox?;
-    if (listBox == null) return;
+    if (listBox == null || !listBox.attached) return;
     final viewportTop = listBox.localToGlobal(Offset.zero).dy;
 
     int? found;
@@ -89,7 +88,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       final ctx = entry.value.currentContext;
       if (ctx == null) continue;
       final box = ctx.findRenderObject() as RenderBox?;
-      if (box == null) continue;
+      if (box == null || !box.attached) continue;
       final top = box.localToGlobal(Offset.zero).dy;
       if (top >= viewportTop - 1) {
         found = entry.key;
@@ -98,6 +97,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     }
     if (found != null && found != _topVerse) {
       _topVerse = found;
+      // Schedule a save shortly after the top verse stabilises. Short
+      // window because the user might exit any moment.
+      _saveDebounce?.cancel();
+      _saveDebounce = Timer(const Duration(milliseconds: 250), () {
+        if (mounted) _saveReadingPosition();
+      });
     }
   }
 
@@ -112,6 +117,27 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     ref
         .read(studyProjectsProvider.notifier)
         .updatePosition(widget.project, pos);
+  }
+
+  /// Synchronous repo write used during teardown — no provider invalidation.
+  void _saveDirectlyOnDispose() {
+    try {
+      final repo = ref.read(projectRepositoryProvider);
+      final updated = widget.project.copyWith(
+        lastOpenedAt: DateTime.now(),
+        lastPosition: ReadingPosition(
+          volume: widget.volume,
+          bookApiId: widget.bookApiId,
+          bookTitle: widget.bookTitle,
+          chapter: _currentChapter,
+          verseNumber: _topVerse,
+        ),
+      );
+      // Fire-and-forget; we're tearing down and can't await.
+      repo.update(updated);
+    } catch (_) {
+      // Swallow — best-effort save during dispose.
+    }
   }
 
   void _goToChapter(int chapter) {
@@ -131,19 +157,35 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   /// After the chapter renders, if we have an initial verse, scroll to it.
-  void _maybeScrollToInitialVerse() {
+  /// `ListView.builder` is lazy, so a verse far down the chapter may not be
+  /// built yet — we jump to an estimated offset to bring it into the build
+  /// region, then a later frame will fine-tune with `ensureVisible`.
+  void _maybeScrollToInitialVerse(int totalVerses) {
     if (!_pendingScrollToVerse) return;
     final verse = _initialVerse;
-    if (verse == null) return;
+    if (verse == null || verse <= 1) {
+      _pendingScrollToVerse = false;
+      return;
+    }
     final key = _verseKeys[verse];
     final ctx = key?.currentContext;
-    if (ctx == null) return;
-    _pendingScrollToVerse = false;
-    Scrollable.ensureVisible(
-      ctx,
-      duration: const Duration(milliseconds: 200),
-      alignment: 0,
-    );
+    if (ctx != null) {
+      _pendingScrollToVerse = false;
+      Scrollable.ensureVisible(
+        ctx,
+        duration: Duration.zero,
+        alignment: 0,
+      );
+      return;
+    }
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final maxScroll = position.maxScrollExtent;
+    if (maxScroll <= 0) return; // Layout not ready yet — retry next frame.
+    final estimated =
+        ((verse - 1) / totalVerses * maxScroll).clamp(0.0, maxScroll);
+    _scrollController.jumpTo(estimated);
+    // Keep _pendingScrollToVerse = true; next frame will retry and refine.
   }
 
   @override
@@ -201,7 +243,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           // scroll the user back to where they left off.
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
-            _maybeScrollToInitialVerse();
+            _maybeScrollToInitialVerse(chapter.verses.length);
             _recomputeTopVerse();
           });
 
