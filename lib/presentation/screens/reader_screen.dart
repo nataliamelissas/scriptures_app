@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/scripture.dart';
 import '../../domain/entities/study_project.dart';
+import '../../domain/repositories/project_repository.dart';
 import '../providers/providers.dart';
 import '../widgets/verse_widget.dart';
 import '../widgets/verse_action_sheet.dart';
@@ -44,12 +45,18 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   Timer? _saveDebounce;
   bool _pendingScrollToVerse = false;
 
+  /// Captured during initState so dispose can write without touching `ref`,
+  /// which is invalid by then.
+  late final ProjectRepository _repo;
+  DateTime _lastSaveAt = DateTime.fromMillisecondsSinceEpoch(0);
+
   @override
   void initState() {
     super.initState();
     _currentChapter = widget.initialChapter;
     _initialVerse = widget.initialVerse;
     _pendingScrollToVerse = _initialVerse != null && _initialVerse! > 1;
+    _repo = ref.read(projectRepositoryProvider);
     _scrollController.addListener(_onScroll);
     _saveReadingPosition();
   }
@@ -97,11 +104,21 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     }
     if (found != null && found != _topVerse) {
       _topVerse = found;
-      // Schedule a save shortly after the top verse stabilises. Short
-      // window because the user might exit any moment.
+      // During continuous scrolling the top verse changes every few frames
+      // and a pure debounce would never fire — keep being cancelled and
+      // re-scheduled. So we also save eagerly at most every 500ms, and use
+      // the debounce only to capture the *final* position after the user
+      // stops scrolling.
+      final now = DateTime.now();
+      if (now.difference(_lastSaveAt) >= const Duration(milliseconds: 500)) {
+        _lastSaveAt = now;
+        _saveReadingPosition();
+      }
       _saveDebounce?.cancel();
       _saveDebounce = Timer(const Duration(milliseconds: 250), () {
-        if (mounted) _saveReadingPosition();
+        if (!mounted) return;
+        _lastSaveAt = DateTime.now();
+        _saveReadingPosition();
       });
     }
   }
@@ -119,25 +136,21 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         .updatePosition(widget.project, pos);
   }
 
-  /// Synchronous repo write used during teardown — no provider invalidation.
+  /// Synchronous repo write used during teardown. Uses the repo we captured
+  /// in initState — `ref` is invalid at this point and would throw.
   void _saveDirectlyOnDispose() {
-    try {
-      final repo = ref.read(projectRepositoryProvider);
-      final updated = widget.project.copyWith(
-        lastOpenedAt: DateTime.now(),
-        lastPosition: ReadingPosition(
-          volume: widget.volume,
-          bookApiId: widget.bookApiId,
-          bookTitle: widget.bookTitle,
-          chapter: _currentChapter,
-          verseNumber: _topVerse,
-        ),
-      );
-      // Fire-and-forget; we're tearing down and can't await.
-      repo.update(updated);
-    } catch (_) {
-      // Swallow — best-effort save during dispose.
-    }
+    final updated = widget.project.copyWith(
+      lastOpenedAt: DateTime.now(),
+      lastPosition: ReadingPosition(
+        volume: widget.volume,
+        bookApiId: widget.bookApiId,
+        bookTitle: widget.bookTitle,
+        chapter: _currentChapter,
+        verseNumber: _topVerse,
+      ),
+    );
+    // Fire-and-forget; we're tearing down and can't await.
+    _repo.update(updated);
   }
 
   void _goToChapter(int chapter) {
