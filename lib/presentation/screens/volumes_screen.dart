@@ -2,12 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/scripture.dart';
 import '../../domain/entities/study_project.dart';
+import '../providers/providers.dart';
 import 'books_screen.dart';
+import 'study_plan_created_screen.dart';
 
-/// Displays the 5 standard works as a grid.
+/// Displays the 5 standard works as a compact list.
+///
+/// [isInitialSetup] = true when this is the project-creation flow: picking a
+/// volume saves it as the project's default and routes to the
+/// "Start reading?" confirmation. Otherwise, picking a volume opens the
+/// books list directly (used by the project's Settings entry point).
 class VolumesScreen extends ConsumerWidget {
   final StudyProject project;
-  const VolumesScreen({super.key, required this.project});
+  final bool isInitialSetup;
+  const VolumesScreen({
+    super.key,
+    required this.project,
+    this.isInitialSetup = false,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -37,17 +49,7 @@ class VolumesScreen extends ConsumerWidget {
                   final volume = StandardWork.values[i];
                   return _VolumeCard(
                     volume: volume,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => BooksScreen(
-                            project: project,
-                            volume: volume,
-                          ),
-                        ),
-                      );
-                    },
+                    onTap: () => _onVolumeTap(context, ref, volume),
                   );
                 },
               ),
@@ -56,6 +58,44 @@ class VolumesScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _onVolumeTap(
+    BuildContext context,
+    WidgetRef ref,
+    StandardWork volume,
+  ) async {
+    if (isInitialSetup) {
+      await ref
+          .read(studyProjectsProvider.notifier)
+          .setDefaultVolume(project, volume);
+      if (!context.mounted) return;
+      final updated = project.copyWith(defaultVolume: volume);
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => StudyPlanCreatedScreen(
+            project: updated,
+            volume: volume,
+          ),
+        ),
+      );
+    } else {
+      // Settings flow: also persist as new default, then jump into the books.
+      await ref
+          .read(studyProjectsProvider.notifier)
+          .setDefaultVolume(project, volume);
+      if (!context.mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BooksScreen(
+            project: project.copyWith(defaultVolume: volume),
+            volume: volume,
+          ),
+        ),
+      );
+    }
   }
 }
 

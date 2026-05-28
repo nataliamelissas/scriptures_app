@@ -93,7 +93,12 @@ class HomeScreen extends ConsumerWidget {
         ref.read(selectedProjectProvider.notifier).state = project;
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => VolumesScreen(project: project)),
+          MaterialPageRoute(
+            builder: (_) => VolumesScreen(
+              project: project,
+              isInitialSetup: true,
+            ),
+          ),
         );
       }
     }
