@@ -12,10 +12,16 @@ class Projects extends Table {
   TextColumn get description => text().nullable()();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get lastOpenedAt => dateTime()();
+  DateTimeColumn get archivedAt => dateTime().nullable()();
+
+  // Volume picked during project creation — used to navigate when there's no
+  // reading position yet, and as the project's "home" standard work.
+  TextColumn get defaultVolumeId => text().nullable()();
 
   // Reading position (nullable — null means "not started yet")
   TextColumn get lastVolume => text().nullable()();
   TextColumn get lastBookApiId => text().nullable()();
+  TextColumn get lastBookTitle => text().nullable()();
   IntColumn get lastChapter => integer().nullable()();
   IntColumn get lastVerse => integer().nullable()();
 
@@ -58,7 +64,18 @@ class AppDatabase extends _$AppDatabase {
       : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await m.addColumn(projects, projects.archivedAt);
+            await m.addColumn(projects, projects.defaultVolumeId);
+            await m.addColumn(projects, projects.lastBookTitle);
+          }
+        },
+      );
 
   static QueryExecutor _openConnection() {
     return driftDatabase(

@@ -8,6 +8,11 @@ class StudyProject {
   final String? description;
   final DateTime createdAt;
   final DateTime lastOpenedAt;
+  final DateTime? archivedAt;
+
+  /// Standard work selected at creation. Used as the default destination
+  /// when the project has no reading position yet.
+  final StandardWork? defaultVolume;
 
   /// Where the user last left off in this project.
   final ReadingPosition? lastPosition;
@@ -18,13 +23,20 @@ class StudyProject {
     this.description,
     required this.createdAt,
     required this.lastOpenedAt,
+    this.archivedAt,
+    this.defaultVolume,
     this.lastPosition,
   });
+
+  bool get isArchived => archivedAt != null;
 
   StudyProject copyWith({
     String? name,
     String? description,
     DateTime? lastOpenedAt,
+    DateTime? archivedAt,
+    bool clearArchivedAt = false,
+    StandardWork? defaultVolume,
     ReadingPosition? lastPosition,
   }) {
     return StudyProject(
@@ -33,6 +45,8 @@ class StudyProject {
       description: description ?? this.description,
       createdAt: createdAt,
       lastOpenedAt: lastOpenedAt ?? this.lastOpenedAt,
+      archivedAt: clearArchivedAt ? null : (archivedAt ?? this.archivedAt),
+      defaultVolume: defaultVolume ?? this.defaultVolume,
       lastPosition: lastPosition ?? this.lastPosition,
     );
   }
@@ -42,12 +56,17 @@ class StudyProject {
 class ReadingPosition {
   final StandardWork volume;
   final String bookApiId;
+  final String bookTitle;
   final int chapter;
+
+  /// Top fully-visible verse when the user last left the reader. Used to
+  /// resume them exactly where they were rather than at the chapter start.
   final int? verseNumber;
 
   const ReadingPosition({
     required this.volume,
     required this.bookApiId,
+    required this.bookTitle,
     required this.chapter,
     this.verseNumber,
   });

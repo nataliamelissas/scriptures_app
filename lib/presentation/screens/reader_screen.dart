@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/scripture.dart';
@@ -14,6 +16,10 @@ class ReaderScreen extends ConsumerStatefulWidget {
   final String bookTitle;
   final int initialChapter;
 
+  /// If set, after the chapter loads we scroll so this verse is at the top.
+  /// Used to resume a session where the user left off mid-chapter.
+  final int? initialVerse;
+
   const ReaderScreen({
     super.key,
     required this.project,
@@ -21,6 +27,7 @@ class ReaderScreen extends ConsumerStatefulWidget {
     required this.bookApiId,
     required this.bookTitle,
     required this.initialChapter,
+    this.initialVerse,
   });
 
   @override
@@ -29,26 +36,78 @@ class ReaderScreen extends ConsumerStatefulWidget {
 
 class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   late int _currentChapter;
+  int? _initialVerse;
   final ScrollController _scrollController = ScrollController();
+  final GlobalKey _listKey = GlobalKey();
+  final Map<int, GlobalKey> _verseKeys = {};
+  int? _topVerse;
+  Timer? _saveDebounce;
+  bool _pendingScrollToVerse = false;
 
   @override
   void initState() {
     super.initState();
     _currentChapter = widget.initialChapter;
+    _initialVerse = widget.initialVerse;
+    _pendingScrollToVerse = _initialVerse != null && _initialVerse! > 1;
+    _scrollController.addListener(_onScroll);
     _saveReadingPosition();
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _saveDebounce?.cancel();
+    // Flush one final save with the latest top verse.
+    _recomputeTopVerse();
+    _saveReadingPosition();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    _recomputeTopVerse();
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(milliseconds: 800), () {
+      if (mounted) _saveReadingPosition();
+    });
+  }
+
+  void _recomputeTopVerse() {
+    final listCtx = _listKey.currentContext;
+    if (listCtx == null) return;
+    final listBox = listCtx.findRenderObject() as RenderBox?;
+    if (listBox == null) return;
+    final viewportTop = listBox.localToGlobal(Offset.zero).dy;
+
+    int? found;
+    // Walk verses in numeric order; the first one whose top is at or below
+    // the viewport top is the top-most fully visible verse.
+    final entries = _verseKeys.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    for (final entry in entries) {
+      final ctx = entry.value.currentContext;
+      if (ctx == null) continue;
+      final box = ctx.findRenderObject() as RenderBox?;
+      if (box == null) continue;
+      final top = box.localToGlobal(Offset.zero).dy;
+      if (top >= viewportTop - 1) {
+        found = entry.key;
+        break;
+      }
+    }
+    if (found != null && found != _topVerse) {
+      _topVerse = found;
+    }
   }
 
   void _saveReadingPosition() {
     final pos = ReadingPosition(
       volume: widget.volume,
       bookApiId: widget.bookApiId,
+      bookTitle: widget.bookTitle,
       chapter: _currentChapter,
+      verseNumber: _topVerse,
     );
     ref
         .read(studyProjectsProvider.notifier)
@@ -57,11 +116,34 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   void _goToChapter(int chapter) {
     if (chapter < 1) return;
-    setState(() => _currentChapter = chapter);
+    _saveDebounce?.cancel();
+    setState(() {
+      _currentChapter = chapter;
+      _topVerse = null;
+      _verseKeys.clear();
+      _initialVerse = null;
+      _pendingScrollToVerse = false;
+    });
     _scrollController.jumpTo(0);
     _saveReadingPosition();
     // Invalidate notes cache for new chapter
     ref.invalidate(chapterNotesProvider);
+  }
+
+  /// After the chapter renders, if we have an initial verse, scroll to it.
+  void _maybeScrollToInitialVerse() {
+    if (!_pendingScrollToVerse) return;
+    final verse = _initialVerse;
+    if (verse == null) return;
+    final key = _verseKeys[verse];
+    final ctx = key?.currentContext;
+    if (ctx == null) return;
+    _pendingScrollToVerse = false;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 200),
+      alignment: 0,
+    );
   }
 
   @override
@@ -115,10 +197,19 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             notesByVerse.putIfAbsent(note.verseNumber, () => []).add(note);
           }
 
+          // After this frame paints, resolve the top verse and (optionally)
+          // scroll the user back to where they left off.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _maybeScrollToInitialVerse();
+            _recomputeTopVerse();
+          });
+
           return Column(
             children: [
               Expanded(
                 child: ListView.builder(
+                  key: _listKey,
                   controller: _scrollController,
                   padding: const EdgeInsets.fromLTRB(24, 16, 24, 100),
                   itemCount:
@@ -142,12 +233,19 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                         chapter.summary != null ? index - 1 : index;
                     final verse = chapter.verses[verseIndex];
                     final verseNotes = notesByVerse[verse.number] ?? [];
+                    final key = _verseKeys.putIfAbsent(
+                      verse.number,
+                      () => GlobalKey(),
+                    );
 
-                    return VerseWidget(
-                      verse: verse,
-                      notes: verseNotes,
-                      textScale: textScale,
-                      onTap: () => _showVerseActions(context, verse),
+                    return KeyedSubtree(
+                      key: key,
+                      child: VerseWidget(
+                        verse: verse,
+                        notes: verseNotes,
+                        textScale: textScale,
+                        onTap: () => _showVerseActions(context, verse),
+                      ),
                     );
                   },
                 ),

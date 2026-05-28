@@ -55,15 +55,40 @@ class StudyProjectsNotifier extends AsyncNotifier<List<StudyProject>> {
     return ref.read(projectRepositoryProvider).getAll();
   }
 
-  Future<StudyProject> create(String name, {String? description}) async {
+  Future<StudyProject> create(
+    String name, {
+    String? description,
+    StandardWork? defaultVolume,
+  }) async {
     final repo = ref.read(projectRepositoryProvider);
-    final project = await repo.create(name, description: description);
+    final project = await repo.create(
+      name,
+      description: description,
+      defaultVolume: defaultVolume,
+    );
     ref.invalidateSelf();
     return project;
   }
 
   Future<void> delete(String projectId) async {
     await ref.read(projectRepositoryProvider).delete(projectId);
+    ref.invalidateSelf();
+  }
+
+  Future<void> setArchived(String projectId, bool archived) async {
+    await ref
+        .read(projectRepositoryProvider)
+        .setArchived(projectId, archived);
+    ref.invalidateSelf();
+    ref.invalidate(archivedProjectsProvider);
+  }
+
+  Future<void> setDefaultVolume(
+    StudyProject project,
+    StandardWork volume,
+  ) async {
+    final updated = project.copyWith(defaultVolume: volume);
+    await ref.read(projectRepositoryProvider).update(updated);
     ref.invalidateSelf();
   }
 
@@ -79,6 +104,11 @@ class StudyProjectsNotifier extends AsyncNotifier<List<StudyProject>> {
     ref.invalidateSelf();
   }
 }
+
+/// Read-only list of archived projects (separate from the main list).
+final archivedProjectsProvider = FutureProvider<List<StudyProject>>((ref) {
+  return ref.read(projectRepositoryProvider).getArchived();
+});
 
 // ── Selected project ────────────────────────────────────────────────────
 

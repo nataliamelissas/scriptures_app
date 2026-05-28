@@ -14,13 +14,27 @@ class ProjectRepositoryImpl implements ProjectRepository {
   @override
   Future<List<StudyProject>> getAll() async {
     final query = _db.select(_db.projects)
+      ..where((p) => p.archivedAt.isNull())
       ..orderBy([(p) => OrderingTerm.desc(p.lastOpenedAt)]);
     final rows = await query.get();
     return rows.map(_toEntity).toList();
   }
 
   @override
-  Future<StudyProject> create(String name, {String? description}) async {
+  Future<List<StudyProject>> getArchived() async {
+    final query = _db.select(_db.projects)
+      ..where((p) => p.archivedAt.isNotNull())
+      ..orderBy([(p) => OrderingTerm.desc(p.archivedAt)]);
+    final rows = await query.get();
+    return rows.map(_toEntity).toList();
+  }
+
+  @override
+  Future<StudyProject> create(
+    String name, {
+    String? description,
+    StandardWork? defaultVolume,
+  }) async {
     final now = DateTime.now();
     final id = _uuid.v4();
 
@@ -30,6 +44,7 @@ class ProjectRepositoryImpl implements ProjectRepository {
           description: Value(description),
           createdAt: now,
           lastOpenedAt: now,
+          defaultVolumeId: Value(defaultVolume?.apiVolumeId),
         ));
 
     return StudyProject(
@@ -38,6 +53,7 @@ class ProjectRepositoryImpl implements ProjectRepository {
       description: description,
       createdAt: now,
       lastOpenedAt: now,
+      defaultVolume: defaultVolume,
     );
   }
 
@@ -49,10 +65,21 @@ class ProjectRepositoryImpl implements ProjectRepository {
       name: Value(project.name),
       description: Value(project.description),
       lastOpenedAt: Value(project.lastOpenedAt),
+      archivedAt: Value(project.archivedAt),
+      defaultVolumeId: Value(project.defaultVolume?.apiVolumeId),
       lastVolume: Value(project.lastPosition?.volume.apiVolumeId),
       lastBookApiId: Value(project.lastPosition?.bookApiId),
+      lastBookTitle: Value(project.lastPosition?.bookTitle),
       lastChapter: Value(project.lastPosition?.chapter),
       lastVerse: Value(project.lastPosition?.verseNumber),
+    ));
+  }
+
+  @override
+  Future<void> setArchived(String projectId, bool archived) async {
+    await (_db.update(_db.projects)..where((p) => p.id.equals(projectId)))
+        .write(ProjectsCompanion(
+      archivedAt: Value(archived ? DateTime.now() : null),
     ));
   }
 
@@ -76,6 +103,7 @@ class ProjectRepositoryImpl implements ProjectRepository {
       pos = ReadingPosition(
         volume: _volumeFromApiId(row.lastVolume!),
         bookApiId: row.lastBookApiId!,
+        bookTitle: row.lastBookTitle ?? row.lastBookApiId!,
         chapter: row.lastChapter!,
         verseNumber: row.lastVerse,
       );
@@ -87,6 +115,9 @@ class ProjectRepositoryImpl implements ProjectRepository {
       description: row.description,
       createdAt: row.createdAt,
       lastOpenedAt: row.lastOpenedAt,
+      archivedAt: row.archivedAt,
+      defaultVolume:
+          row.defaultVolumeId != null ? _volumeFromApiId(row.defaultVolumeId!) : null,
       lastPosition: pos,
     );
   }

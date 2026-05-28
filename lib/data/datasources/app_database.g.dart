@@ -59,6 +59,28 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _archivedAtMeta = const VerificationMeta(
+    'archivedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> archivedAt = GeneratedColumn<DateTime>(
+    'archived_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _defaultVolumeIdMeta = const VerificationMeta(
+    'defaultVolumeId',
+  );
+  @override
+  late final GeneratedColumn<String> defaultVolumeId = GeneratedColumn<String>(
+    'default_volume_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _lastVolumeMeta = const VerificationMeta(
     'lastVolume',
   );
@@ -76,6 +98,17 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
   @override
   late final GeneratedColumn<String> lastBookApiId = GeneratedColumn<String>(
     'last_book_api_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastBookTitleMeta = const VerificationMeta(
+    'lastBookTitle',
+  );
+  @override
+  late final GeneratedColumn<String> lastBookTitle = GeneratedColumn<String>(
+    'last_book_title',
     aliasedName,
     true,
     type: DriftSqlType.string,
@@ -110,8 +143,11 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
     description,
     createdAt,
     lastOpenedAt,
+    archivedAt,
+    defaultVolumeId,
     lastVolume,
     lastBookApiId,
+    lastBookTitle,
     lastChapter,
     lastVerse,
   ];
@@ -168,6 +204,21 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
     } else if (isInserting) {
       context.missing(_lastOpenedAtMeta);
     }
+    if (data.containsKey('archived_at')) {
+      context.handle(
+        _archivedAtMeta,
+        archivedAt.isAcceptableOrUnknown(data['archived_at']!, _archivedAtMeta),
+      );
+    }
+    if (data.containsKey('default_volume_id')) {
+      context.handle(
+        _defaultVolumeIdMeta,
+        defaultVolumeId.isAcceptableOrUnknown(
+          data['default_volume_id']!,
+          _defaultVolumeIdMeta,
+        ),
+      );
+    }
     if (data.containsKey('last_volume')) {
       context.handle(
         _lastVolumeMeta,
@@ -180,6 +231,15 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
         lastBookApiId.isAcceptableOrUnknown(
           data['last_book_api_id']!,
           _lastBookApiIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_book_title')) {
+      context.handle(
+        _lastBookTitleMeta,
+        lastBookTitle.isAcceptableOrUnknown(
+          data['last_book_title']!,
+          _lastBookTitleMeta,
         ),
       );
     }
@@ -227,6 +287,14 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
         DriftSqlType.dateTime,
         data['${effectivePrefix}last_opened_at'],
       )!,
+      archivedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}archived_at'],
+      ),
+      defaultVolumeId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}default_volume_id'],
+      ),
       lastVolume: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}last_volume'],
@@ -234,6 +302,10 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
       lastBookApiId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}last_book_api_id'],
+      ),
+      lastBookTitle: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_book_title'],
       ),
       lastChapter: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
@@ -258,8 +330,11 @@ class Project extends DataClass implements Insertable<Project> {
   final String? description;
   final DateTime createdAt;
   final DateTime lastOpenedAt;
+  final DateTime? archivedAt;
+  final String? defaultVolumeId;
   final String? lastVolume;
   final String? lastBookApiId;
+  final String? lastBookTitle;
   final int? lastChapter;
   final int? lastVerse;
   const Project({
@@ -268,8 +343,11 @@ class Project extends DataClass implements Insertable<Project> {
     this.description,
     required this.createdAt,
     required this.lastOpenedAt,
+    this.archivedAt,
+    this.defaultVolumeId,
     this.lastVolume,
     this.lastBookApiId,
+    this.lastBookTitle,
     this.lastChapter,
     this.lastVerse,
   });
@@ -283,11 +361,20 @@ class Project extends DataClass implements Insertable<Project> {
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['last_opened_at'] = Variable<DateTime>(lastOpenedAt);
+    if (!nullToAbsent || archivedAt != null) {
+      map['archived_at'] = Variable<DateTime>(archivedAt);
+    }
+    if (!nullToAbsent || defaultVolumeId != null) {
+      map['default_volume_id'] = Variable<String>(defaultVolumeId);
+    }
     if (!nullToAbsent || lastVolume != null) {
       map['last_volume'] = Variable<String>(lastVolume);
     }
     if (!nullToAbsent || lastBookApiId != null) {
       map['last_book_api_id'] = Variable<String>(lastBookApiId);
+    }
+    if (!nullToAbsent || lastBookTitle != null) {
+      map['last_book_title'] = Variable<String>(lastBookTitle);
     }
     if (!nullToAbsent || lastChapter != null) {
       map['last_chapter'] = Variable<int>(lastChapter);
@@ -307,12 +394,21 @@ class Project extends DataClass implements Insertable<Project> {
           : Value(description),
       createdAt: Value(createdAt),
       lastOpenedAt: Value(lastOpenedAt),
+      archivedAt: archivedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(archivedAt),
+      defaultVolumeId: defaultVolumeId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(defaultVolumeId),
       lastVolume: lastVolume == null && nullToAbsent
           ? const Value.absent()
           : Value(lastVolume),
       lastBookApiId: lastBookApiId == null && nullToAbsent
           ? const Value.absent()
           : Value(lastBookApiId),
+      lastBookTitle: lastBookTitle == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastBookTitle),
       lastChapter: lastChapter == null && nullToAbsent
           ? const Value.absent()
           : Value(lastChapter),
@@ -333,8 +429,11 @@ class Project extends DataClass implements Insertable<Project> {
       description: serializer.fromJson<String?>(json['description']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       lastOpenedAt: serializer.fromJson<DateTime>(json['lastOpenedAt']),
+      archivedAt: serializer.fromJson<DateTime?>(json['archivedAt']),
+      defaultVolumeId: serializer.fromJson<String?>(json['defaultVolumeId']),
       lastVolume: serializer.fromJson<String?>(json['lastVolume']),
       lastBookApiId: serializer.fromJson<String?>(json['lastBookApiId']),
+      lastBookTitle: serializer.fromJson<String?>(json['lastBookTitle']),
       lastChapter: serializer.fromJson<int?>(json['lastChapter']),
       lastVerse: serializer.fromJson<int?>(json['lastVerse']),
     );
@@ -348,8 +447,11 @@ class Project extends DataClass implements Insertable<Project> {
       'description': serializer.toJson<String?>(description),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'lastOpenedAt': serializer.toJson<DateTime>(lastOpenedAt),
+      'archivedAt': serializer.toJson<DateTime?>(archivedAt),
+      'defaultVolumeId': serializer.toJson<String?>(defaultVolumeId),
       'lastVolume': serializer.toJson<String?>(lastVolume),
       'lastBookApiId': serializer.toJson<String?>(lastBookApiId),
+      'lastBookTitle': serializer.toJson<String?>(lastBookTitle),
       'lastChapter': serializer.toJson<int?>(lastChapter),
       'lastVerse': serializer.toJson<int?>(lastVerse),
     };
@@ -361,8 +463,11 @@ class Project extends DataClass implements Insertable<Project> {
     Value<String?> description = const Value.absent(),
     DateTime? createdAt,
     DateTime? lastOpenedAt,
+    Value<DateTime?> archivedAt = const Value.absent(),
+    Value<String?> defaultVolumeId = const Value.absent(),
     Value<String?> lastVolume = const Value.absent(),
     Value<String?> lastBookApiId = const Value.absent(),
+    Value<String?> lastBookTitle = const Value.absent(),
     Value<int?> lastChapter = const Value.absent(),
     Value<int?> lastVerse = const Value.absent(),
   }) => Project(
@@ -371,10 +476,17 @@ class Project extends DataClass implements Insertable<Project> {
     description: description.present ? description.value : this.description,
     createdAt: createdAt ?? this.createdAt,
     lastOpenedAt: lastOpenedAt ?? this.lastOpenedAt,
+    archivedAt: archivedAt.present ? archivedAt.value : this.archivedAt,
+    defaultVolumeId: defaultVolumeId.present
+        ? defaultVolumeId.value
+        : this.defaultVolumeId,
     lastVolume: lastVolume.present ? lastVolume.value : this.lastVolume,
     lastBookApiId: lastBookApiId.present
         ? lastBookApiId.value
         : this.lastBookApiId,
+    lastBookTitle: lastBookTitle.present
+        ? lastBookTitle.value
+        : this.lastBookTitle,
     lastChapter: lastChapter.present ? lastChapter.value : this.lastChapter,
     lastVerse: lastVerse.present ? lastVerse.value : this.lastVerse,
   );
@@ -389,12 +501,21 @@ class Project extends DataClass implements Insertable<Project> {
       lastOpenedAt: data.lastOpenedAt.present
           ? data.lastOpenedAt.value
           : this.lastOpenedAt,
+      archivedAt: data.archivedAt.present
+          ? data.archivedAt.value
+          : this.archivedAt,
+      defaultVolumeId: data.defaultVolumeId.present
+          ? data.defaultVolumeId.value
+          : this.defaultVolumeId,
       lastVolume: data.lastVolume.present
           ? data.lastVolume.value
           : this.lastVolume,
       lastBookApiId: data.lastBookApiId.present
           ? data.lastBookApiId.value
           : this.lastBookApiId,
+      lastBookTitle: data.lastBookTitle.present
+          ? data.lastBookTitle.value
+          : this.lastBookTitle,
       lastChapter: data.lastChapter.present
           ? data.lastChapter.value
           : this.lastChapter,
@@ -410,8 +531,11 @@ class Project extends DataClass implements Insertable<Project> {
           ..write('description: $description, ')
           ..write('createdAt: $createdAt, ')
           ..write('lastOpenedAt: $lastOpenedAt, ')
+          ..write('archivedAt: $archivedAt, ')
+          ..write('defaultVolumeId: $defaultVolumeId, ')
           ..write('lastVolume: $lastVolume, ')
           ..write('lastBookApiId: $lastBookApiId, ')
+          ..write('lastBookTitle: $lastBookTitle, ')
           ..write('lastChapter: $lastChapter, ')
           ..write('lastVerse: $lastVerse')
           ..write(')'))
@@ -425,8 +549,11 @@ class Project extends DataClass implements Insertable<Project> {
     description,
     createdAt,
     lastOpenedAt,
+    archivedAt,
+    defaultVolumeId,
     lastVolume,
     lastBookApiId,
+    lastBookTitle,
     lastChapter,
     lastVerse,
   );
@@ -439,8 +566,11 @@ class Project extends DataClass implements Insertable<Project> {
           other.description == this.description &&
           other.createdAt == this.createdAt &&
           other.lastOpenedAt == this.lastOpenedAt &&
+          other.archivedAt == this.archivedAt &&
+          other.defaultVolumeId == this.defaultVolumeId &&
           other.lastVolume == this.lastVolume &&
           other.lastBookApiId == this.lastBookApiId &&
+          other.lastBookTitle == this.lastBookTitle &&
           other.lastChapter == this.lastChapter &&
           other.lastVerse == this.lastVerse);
 }
@@ -451,8 +581,11 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
   final Value<String?> description;
   final Value<DateTime> createdAt;
   final Value<DateTime> lastOpenedAt;
+  final Value<DateTime?> archivedAt;
+  final Value<String?> defaultVolumeId;
   final Value<String?> lastVolume;
   final Value<String?> lastBookApiId;
+  final Value<String?> lastBookTitle;
   final Value<int?> lastChapter;
   final Value<int?> lastVerse;
   final Value<int> rowid;
@@ -462,8 +595,11 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     this.description = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.lastOpenedAt = const Value.absent(),
+    this.archivedAt = const Value.absent(),
+    this.defaultVolumeId = const Value.absent(),
     this.lastVolume = const Value.absent(),
     this.lastBookApiId = const Value.absent(),
+    this.lastBookTitle = const Value.absent(),
     this.lastChapter = const Value.absent(),
     this.lastVerse = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -474,8 +610,11 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     this.description = const Value.absent(),
     required DateTime createdAt,
     required DateTime lastOpenedAt,
+    this.archivedAt = const Value.absent(),
+    this.defaultVolumeId = const Value.absent(),
     this.lastVolume = const Value.absent(),
     this.lastBookApiId = const Value.absent(),
+    this.lastBookTitle = const Value.absent(),
     this.lastChapter = const Value.absent(),
     this.lastVerse = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -489,8 +628,11 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     Expression<String>? description,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? lastOpenedAt,
+    Expression<DateTime>? archivedAt,
+    Expression<String>? defaultVolumeId,
     Expression<String>? lastVolume,
     Expression<String>? lastBookApiId,
+    Expression<String>? lastBookTitle,
     Expression<int>? lastChapter,
     Expression<int>? lastVerse,
     Expression<int>? rowid,
@@ -501,8 +643,11 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
       if (description != null) 'description': description,
       if (createdAt != null) 'created_at': createdAt,
       if (lastOpenedAt != null) 'last_opened_at': lastOpenedAt,
+      if (archivedAt != null) 'archived_at': archivedAt,
+      if (defaultVolumeId != null) 'default_volume_id': defaultVolumeId,
       if (lastVolume != null) 'last_volume': lastVolume,
       if (lastBookApiId != null) 'last_book_api_id': lastBookApiId,
+      if (lastBookTitle != null) 'last_book_title': lastBookTitle,
       if (lastChapter != null) 'last_chapter': lastChapter,
       if (lastVerse != null) 'last_verse': lastVerse,
       if (rowid != null) 'rowid': rowid,
@@ -515,8 +660,11 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     Value<String?>? description,
     Value<DateTime>? createdAt,
     Value<DateTime>? lastOpenedAt,
+    Value<DateTime?>? archivedAt,
+    Value<String?>? defaultVolumeId,
     Value<String?>? lastVolume,
     Value<String?>? lastBookApiId,
+    Value<String?>? lastBookTitle,
     Value<int?>? lastChapter,
     Value<int?>? lastVerse,
     Value<int>? rowid,
@@ -527,8 +675,11 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
       description: description ?? this.description,
       createdAt: createdAt ?? this.createdAt,
       lastOpenedAt: lastOpenedAt ?? this.lastOpenedAt,
+      archivedAt: archivedAt ?? this.archivedAt,
+      defaultVolumeId: defaultVolumeId ?? this.defaultVolumeId,
       lastVolume: lastVolume ?? this.lastVolume,
       lastBookApiId: lastBookApiId ?? this.lastBookApiId,
+      lastBookTitle: lastBookTitle ?? this.lastBookTitle,
       lastChapter: lastChapter ?? this.lastChapter,
       lastVerse: lastVerse ?? this.lastVerse,
       rowid: rowid ?? this.rowid,
@@ -553,11 +704,20 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     if (lastOpenedAt.present) {
       map['last_opened_at'] = Variable<DateTime>(lastOpenedAt.value);
     }
+    if (archivedAt.present) {
+      map['archived_at'] = Variable<DateTime>(archivedAt.value);
+    }
+    if (defaultVolumeId.present) {
+      map['default_volume_id'] = Variable<String>(defaultVolumeId.value);
+    }
     if (lastVolume.present) {
       map['last_volume'] = Variable<String>(lastVolume.value);
     }
     if (lastBookApiId.present) {
       map['last_book_api_id'] = Variable<String>(lastBookApiId.value);
+    }
+    if (lastBookTitle.present) {
+      map['last_book_title'] = Variable<String>(lastBookTitle.value);
     }
     if (lastChapter.present) {
       map['last_chapter'] = Variable<int>(lastChapter.value);
@@ -579,8 +739,11 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
           ..write('description: $description, ')
           ..write('createdAt: $createdAt, ')
           ..write('lastOpenedAt: $lastOpenedAt, ')
+          ..write('archivedAt: $archivedAt, ')
+          ..write('defaultVolumeId: $defaultVolumeId, ')
           ..write('lastVolume: $lastVolume, ')
           ..write('lastBookApiId: $lastBookApiId, ')
+          ..write('lastBookTitle: $lastBookTitle, ')
           ..write('lastChapter: $lastChapter, ')
           ..write('lastVerse: $lastVerse, ')
           ..write('rowid: $rowid')
@@ -1609,8 +1772,11 @@ typedef $$ProjectsTableCreateCompanionBuilder =
       Value<String?> description,
       required DateTime createdAt,
       required DateTime lastOpenedAt,
+      Value<DateTime?> archivedAt,
+      Value<String?> defaultVolumeId,
       Value<String?> lastVolume,
       Value<String?> lastBookApiId,
+      Value<String?> lastBookTitle,
       Value<int?> lastChapter,
       Value<int?> lastVerse,
       Value<int> rowid,
@@ -1622,8 +1788,11 @@ typedef $$ProjectsTableUpdateCompanionBuilder =
       Value<String?> description,
       Value<DateTime> createdAt,
       Value<DateTime> lastOpenedAt,
+      Value<DateTime?> archivedAt,
+      Value<String?> defaultVolumeId,
       Value<String?> lastVolume,
       Value<String?> lastBookApiId,
+      Value<String?> lastBookTitle,
       Value<int?> lastChapter,
       Value<int?> lastVerse,
       Value<int> rowid,
@@ -1687,6 +1856,16 @@ class $$ProjectsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<DateTime> get archivedAt => $composableBuilder(
+    column: $table.archivedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get defaultVolumeId => $composableBuilder(
+    column: $table.defaultVolumeId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get lastVolume => $composableBuilder(
     column: $table.lastVolume,
     builder: (column) => ColumnFilters(column),
@@ -1694,6 +1873,11 @@ class $$ProjectsTableFilterComposer
 
   ColumnFilters<String> get lastBookApiId => $composableBuilder(
     column: $table.lastBookApiId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastBookTitle => $composableBuilder(
+    column: $table.lastBookTitle,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1767,6 +1951,16 @@ class $$ProjectsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get archivedAt => $composableBuilder(
+    column: $table.archivedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get defaultVolumeId => $composableBuilder(
+    column: $table.defaultVolumeId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get lastVolume => $composableBuilder(
     column: $table.lastVolume,
     builder: (column) => ColumnOrderings(column),
@@ -1774,6 +1968,11 @@ class $$ProjectsTableOrderingComposer
 
   ColumnOrderings<String> get lastBookApiId => $composableBuilder(
     column: $table.lastBookApiId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastBookTitle => $composableBuilder(
+    column: $table.lastBookTitle,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -1816,6 +2015,16 @@ class $$ProjectsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<DateTime> get archivedAt => $composableBuilder(
+    column: $table.archivedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get defaultVolumeId => $composableBuilder(
+    column: $table.defaultVolumeId,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get lastVolume => $composableBuilder(
     column: $table.lastVolume,
     builder: (column) => column,
@@ -1823,6 +2032,11 @@ class $$ProjectsTableAnnotationComposer
 
   GeneratedColumn<String> get lastBookApiId => $composableBuilder(
     column: $table.lastBookApiId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastBookTitle => $composableBuilder(
+    column: $table.lastBookTitle,
     builder: (column) => column,
   );
 
@@ -1893,8 +2107,11 @@ class $$ProjectsTableTableManager
                 Value<String?> description = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> lastOpenedAt = const Value.absent(),
+                Value<DateTime?> archivedAt = const Value.absent(),
+                Value<String?> defaultVolumeId = const Value.absent(),
                 Value<String?> lastVolume = const Value.absent(),
                 Value<String?> lastBookApiId = const Value.absent(),
+                Value<String?> lastBookTitle = const Value.absent(),
                 Value<int?> lastChapter = const Value.absent(),
                 Value<int?> lastVerse = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -1904,8 +2121,11 @@ class $$ProjectsTableTableManager
                 description: description,
                 createdAt: createdAt,
                 lastOpenedAt: lastOpenedAt,
+                archivedAt: archivedAt,
+                defaultVolumeId: defaultVolumeId,
                 lastVolume: lastVolume,
                 lastBookApiId: lastBookApiId,
+                lastBookTitle: lastBookTitle,
                 lastChapter: lastChapter,
                 lastVerse: lastVerse,
                 rowid: rowid,
@@ -1917,8 +2137,11 @@ class $$ProjectsTableTableManager
                 Value<String?> description = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime lastOpenedAt,
+                Value<DateTime?> archivedAt = const Value.absent(),
+                Value<String?> defaultVolumeId = const Value.absent(),
                 Value<String?> lastVolume = const Value.absent(),
                 Value<String?> lastBookApiId = const Value.absent(),
+                Value<String?> lastBookTitle = const Value.absent(),
                 Value<int?> lastChapter = const Value.absent(),
                 Value<int?> lastVerse = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -1928,8 +2151,11 @@ class $$ProjectsTableTableManager
                 description: description,
                 createdAt: createdAt,
                 lastOpenedAt: lastOpenedAt,
+                archivedAt: archivedAt,
+                defaultVolumeId: defaultVolumeId,
                 lastVolume: lastVolume,
                 lastBookApiId: lastBookApiId,
+                lastBookTitle: lastBookTitle,
                 lastChapter: lastChapter,
                 lastVerse: lastVerse,
                 rowid: rowid,
