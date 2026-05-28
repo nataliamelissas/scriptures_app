@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/scripture.dart';
 import '../../domain/entities/study_project.dart';
-import '../../domain/repositories/project_repository.dart';
 import '../providers/providers.dart';
 import '../widgets/verse_widget.dart';
 import '../widgets/verse_action_sheet.dart';
@@ -45,9 +44,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   Timer? _saveDebounce;
   bool _pendingScrollToVerse = false;
 
-  /// Captured during initState so dispose can write without touching `ref`,
-  /// which is invalid by then.
-  late final ProjectRepository _repo;
+  /// Captured during initState. Notifiers live in the ProviderContainer and
+  /// outlive the widget, so we can use this reference safely from dispose,
+  /// post-frame callbacks, and debounce timers — none of which can safely
+  /// touch the widget's `ref`.
+  late final StudyProjectsNotifier _projectsNotifier;
   DateTime _lastSaveAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
@@ -56,7 +57,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     _currentChapter = widget.initialChapter;
     _initialVerse = widget.initialVerse;
     _pendingScrollToVerse = _initialVerse != null && _initialVerse! > 1;
-    _repo = ref.read(projectRepositoryProvider);
+    _projectsNotifier = ref.read(studyProjectsProvider.notifier);
     _scrollController.addListener(_onScroll);
     _saveReadingPosition();
   }
@@ -65,12 +66,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _saveDebounce?.cancel();
-    // Best-effort final save: write directly to the repository instead of
-    // going through the notifier. The notifier's invalidateSelf() would
-    // notify listeners (including widgets that are also being torn down
-    // along this navigation pop) and trip `markNeedsBuild` on disposed
-    // elements. A direct repo write has no such side effects.
-    _saveDirectlyOnDispose();
+    // Final flush. Goes through the notifier so the home screen sees the
+    // updated position when we pop back. Safe even mid-teardown because the
+    // notifier reference is captured from the long-lived ProviderContainer.
+    _saveReadingPosition();
     _scrollController.dispose();
     super.dispose();
   }
@@ -131,26 +130,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       chapter: _currentChapter,
       verseNumber: _topVerse,
     );
-    ref
-        .read(studyProjectsProvider.notifier)
-        .updatePosition(widget.project, pos);
-  }
-
-  /// Synchronous repo write used during teardown. Uses the repo we captured
-  /// in initState — `ref` is invalid at this point and would throw.
-  void _saveDirectlyOnDispose() {
-    final updated = widget.project.copyWith(
-      lastOpenedAt: DateTime.now(),
-      lastPosition: ReadingPosition(
-        volume: widget.volume,
-        bookApiId: widget.bookApiId,
-        bookTitle: widget.bookTitle,
-        chapter: _currentChapter,
-        verseNumber: _topVerse,
-      ),
-    );
-    // Fire-and-forget; we're tearing down and can't await.
-    _repo.update(updated);
+    // Fire-and-forget via the captured notifier (NOT ref) so this is safe
+    // from dispose, debounce callbacks, and post-frame callbacks alike.
+    _projectsNotifier.updatePosition(widget.project, pos);
   }
 
   void _goToChapter(int chapter) {
