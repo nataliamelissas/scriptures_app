@@ -30,12 +30,11 @@ class VolumesScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
             Expanded(
-              child: GridView.count(
-                crossAxisCount: 2,
-                mainAxisSpacing: 14,
-                crossAxisSpacing: 14,
-                childAspectRatio: 1.3,
-                children: StandardWork.values.map((volume) {
+              child: ListView.separated(
+                itemCount: StandardWork.values.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                itemBuilder: (context, i) {
+                  final volume = StandardWork.values[i];
                   return _VolumeCard(
                     volume: volume,
                     onTap: () {
@@ -50,7 +49,7 @@ class VolumesScreen extends ConsumerWidget {
                       );
                     },
                   );
-                }).toList(),
+                },
               ),
             ),
           ],
@@ -77,21 +76,27 @@ class _VolumeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Card(
+      margin: EdgeInsets.zero,
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
             children: [
-              Icon(_icon, size: 30, color: theme.colorScheme.primary),
-              Text(
-                volume.displayName,
-                style: theme.textTheme.titleMedium,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              Icon(_icon, size: 22, color: theme.colorScheme.primary),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  volume.displayName,
+                  style: theme.textTheme.titleMedium,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: theme.colorScheme.outline,
               ),
             ],
           ),
