@@ -1,7 +1,8 @@
 import 'scripture.dart';
 
 /// A named study project — the core differentiator of this app.
-/// Each project maintains its own reading position and independent set of notes.
+/// Each project maintains its own per-volume reading positions and
+/// independent set of notes.
 class StudyProject {
   final String id;
   final String name;
@@ -10,12 +11,20 @@ class StudyProject {
   final DateTime lastOpenedAt;
   final DateTime? archivedAt;
 
-  /// Standard work selected at creation. Used as the default destination
-  /// when the project has no reading position yet.
-  final StandardWork? defaultVolume;
+  /// User-defined tags (e.g. "hope", "faith"). Each capped at 15 chars
+  /// at the UI layer.
+  final List<String> tags;
 
-  /// Where the user last left off in this project.
-  final ReadingPosition? lastPosition;
+  /// Standard works the user has added to this study project.
+  final List<StandardWork> volumes;
+
+  /// The last-touched volume — used to know where to return when opening
+  /// the project. Null if no reading has happened yet.
+  final StandardWork? activeVolume;
+
+  /// Per-volume reading positions. A volume is only present here once
+  /// the user has actually read from it.
+  final Map<StandardWork, ReadingPosition> positions;
 
   const StudyProject({
     required this.id,
@@ -24,11 +33,17 @@ class StudyProject {
     required this.createdAt,
     required this.lastOpenedAt,
     this.archivedAt,
-    this.defaultVolume,
-    this.lastPosition,
+    this.tags = const [],
+    this.volumes = const [],
+    this.activeVolume,
+    this.positions = const {},
   });
 
   bool get isArchived => archivedAt != null;
+
+  /// Position in the currently-active volume, if any.
+  ReadingPosition? get activePosition =>
+      activeVolume == null ? null : positions[activeVolume];
 
   StudyProject copyWith({
     String? name,
@@ -36,8 +51,11 @@ class StudyProject {
     DateTime? lastOpenedAt,
     DateTime? archivedAt,
     bool clearArchivedAt = false,
-    StandardWork? defaultVolume,
-    ReadingPosition? lastPosition,
+    List<String>? tags,
+    List<StandardWork>? volumes,
+    StandardWork? activeVolume,
+    bool clearActiveVolume = false,
+    Map<StandardWork, ReadingPosition>? positions,
   }) {
     return StudyProject(
       id: id,
@@ -46,8 +64,11 @@ class StudyProject {
       createdAt: createdAt,
       lastOpenedAt: lastOpenedAt ?? this.lastOpenedAt,
       archivedAt: clearArchivedAt ? null : (archivedAt ?? this.archivedAt),
-      defaultVolume: defaultVolume ?? this.defaultVolume,
-      lastPosition: lastPosition ?? this.lastPosition,
+      tags: tags ?? this.tags,
+      volumes: volumes ?? this.volumes,
+      activeVolume:
+          clearActiveVolume ? null : (activeVolume ?? this.activeVolume),
+      positions: positions ?? this.positions,
     );
   }
 }

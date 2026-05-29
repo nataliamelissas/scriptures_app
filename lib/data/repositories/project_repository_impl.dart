@@ -8,6 +8,7 @@ import '../datasources/app_database.dart';
 class ProjectRepositoryImpl implements ProjectRepository {
   final AppDatabase _db;
   static const _uuid = Uuid();
+  static const _listSeparator = ',';
 
   ProjectRepositoryImpl({required AppDatabase db}) : _db = db;
 
@@ -17,7 +18,7 @@ class ProjectRepositoryImpl implements ProjectRepository {
       ..where((p) => p.archivedAt.isNull())
       ..orderBy([(p) => OrderingTerm.desc(p.lastOpenedAt)]);
     final rows = await query.get();
-    return rows.map(_toEntity).toList();
+    return _hydrate(rows);
   }
 
   @override
@@ -26,14 +27,15 @@ class ProjectRepositoryImpl implements ProjectRepository {
       ..where((p) => p.archivedAt.isNotNull())
       ..orderBy([(p) => OrderingTerm.desc(p.archivedAt)]);
     final rows = await query.get();
-    return rows.map(_toEntity).toList();
+    return _hydrate(rows);
   }
 
   @override
   Future<StudyProject> create(
     String name, {
     String? description,
-    StandardWork? defaultVolume,
+    List<String> tags = const [],
+    List<StandardWork> volumes = const [],
   }) async {
     final now = DateTime.now();
     final id = _uuid.v4();
@@ -44,7 +46,8 @@ class ProjectRepositoryImpl implements ProjectRepository {
           description: Value(description),
           createdAt: now,
           lastOpenedAt: now,
-          defaultVolumeId: Value(defaultVolume?.apiVolumeId),
+          tags: Value(_encodeStringList(tags)),
+          volumes: Value(_encodeVolumes(volumes)),
         ));
 
     return StudyProject(
@@ -53,26 +56,46 @@ class ProjectRepositoryImpl implements ProjectRepository {
       description: description,
       createdAt: now,
       lastOpenedAt: now,
-      defaultVolume: defaultVolume,
+      tags: List.unmodifiable(tags),
+      volumes: List.unmodifiable(volumes),
     );
   }
 
   @override
   Future<void> update(StudyProject project) async {
-    await (_db.update(_db.projects)
-          ..where((p) => p.id.equals(project.id)))
-        .write(ProjectsCompanion(
-      name: Value(project.name),
-      description: Value(project.description),
-      lastOpenedAt: Value(project.lastOpenedAt),
-      archivedAt: Value(project.archivedAt),
-      defaultVolumeId: Value(project.defaultVolume?.apiVolumeId),
-      lastVolume: Value(project.lastPosition?.volume.apiVolumeId),
-      lastBookApiId: Value(project.lastPosition?.bookApiId),
-      lastBookTitle: Value(project.lastPosition?.bookTitle),
-      lastChapter: Value(project.lastPosition?.chapter),
-      lastVerse: Value(project.lastPosition?.verseNumber),
-    ));
+    await _db.transaction(() async {
+      await (_db.update(_db.projects)
+            ..where((p) => p.id.equals(project.id)))
+          .write(ProjectsCompanion(
+        name: Value(project.name),
+        description: Value(project.description),
+        lastOpenedAt: Value(project.lastOpenedAt),
+        archivedAt: Value(project.archivedAt),
+        tags: Value(_encodeStringList(project.tags)),
+        volumes: Value(_encodeVolumes(project.volumes)),
+        activeVolumeId: Value(project.activeVolume?.apiVolumeId),
+      ));
+
+      // Replace positions wholesale: only the volumes currently in the
+      // entity's positions map should persist.
+      await (_db.delete(_db.projectPositions)
+            ..where((pp) => pp.projectId.equals(project.id)))
+          .go();
+      for (final entry in project.positions.entries) {
+        final pos = entry.value;
+        await _db.into(_db.projectPositions).insert(
+              ProjectPositionsCompanion.insert(
+                projectId: project.id,
+                volume: entry.key.apiVolumeId,
+                bookApiId: pos.bookApiId,
+                bookTitle: pos.bookTitle,
+                chapter: pos.chapter,
+                verseNumber: Value(pos.verseNumber),
+              ),
+              mode: InsertMode.insertOrReplace,
+            );
+      }
+    });
   }
 
   @override
@@ -85,30 +108,49 @@ class ProjectRepositoryImpl implements ProjectRepository {
 
   @override
   Future<void> delete(String projectId) async {
-    // Delete notes first (Drift doesn't auto-cascade by default at runtime)
-    await (_db.delete(_db.notes)
-          ..where((n) => n.projectId.equals(projectId)))
-        .go();
-    await (_db.delete(_db.projects)..where((p) => p.id.equals(projectId)))
-        .go();
+    await _db.transaction(() async {
+      await (_db.delete(_db.notes)
+            ..where((n) => n.projectId.equals(projectId)))
+          .go();
+      await (_db.delete(_db.projectPositions)
+            ..where((pp) => pp.projectId.equals(projectId)))
+          .go();
+      await (_db.delete(_db.projects)..where((p) => p.id.equals(projectId)))
+          .go();
+    });
   }
 
-  // ── Mapping ───────────────────────────────────────────────────────────
+  // ── Hydration ─────────────────────────────────────────────────────────
 
-  static StudyProject _toEntity(Project row) {
-    ReadingPosition? pos;
-    if (row.lastVolume != null &&
-        row.lastBookApiId != null &&
-        row.lastChapter != null) {
-      pos = ReadingPosition(
-        volume: _volumeFromApiId(row.lastVolume!),
-        bookApiId: row.lastBookApiId!,
-        bookTitle: row.lastBookTitle ?? row.lastBookApiId!,
-        chapter: row.lastChapter!,
-        verseNumber: row.lastVerse,
+  Future<List<StudyProject>> _hydrate(List<Project> rows) async {
+    if (rows.isEmpty) return const [];
+    final ids = rows.map((r) => r.id).toList();
+    final positionRows = await (_db.select(_db.projectPositions)
+          ..where((pp) => pp.projectId.isIn(ids)))
+        .get();
+
+    final positionsByProject = <String, Map<StandardWork, ReadingPosition>>{};
+    for (final pp in positionRows) {
+      final vol = _volumeFromApiId(pp.volume);
+      positionsByProject
+          .putIfAbsent(pp.projectId, () => {})[vol] = ReadingPosition(
+        volume: vol,
+        bookApiId: pp.bookApiId,
+        bookTitle: pp.bookTitle,
+        chapter: pp.chapter,
+        verseNumber: pp.verseNumber,
       );
     }
 
+    return rows
+        .map((r) => _toEntity(r, positionsByProject[r.id] ?? const {}))
+        .toList();
+  }
+
+  static StudyProject _toEntity(
+    Project row,
+    Map<StandardWork, ReadingPosition> positions,
+  ) {
     return StudyProject(
       id: row.id,
       name: row.name,
@@ -116,10 +158,39 @@ class ProjectRepositoryImpl implements ProjectRepository {
       createdAt: row.createdAt,
       lastOpenedAt: row.lastOpenedAt,
       archivedAt: row.archivedAt,
-      defaultVolume:
-          row.defaultVolumeId != null ? _volumeFromApiId(row.defaultVolumeId!) : null,
-      lastPosition: pos,
+      tags: List.unmodifiable(_decodeStringList(row.tags)),
+      volumes: List.unmodifiable(_decodeVolumes(row.volumes)),
+      activeVolume: row.activeVolumeId != null
+          ? _volumeFromApiId(row.activeVolumeId!)
+          : null,
+      positions: Map.unmodifiable(positions),
     );
+  }
+
+  // ── Encoding helpers ──────────────────────────────────────────────────
+
+  static String? _encodeStringList(List<String> items) {
+    if (items.isEmpty) return null;
+    return items.join(_listSeparator);
+  }
+
+  static List<String> _decodeStringList(String? raw) {
+    if (raw == null || raw.isEmpty) return const [];
+    return raw.split(_listSeparator).where((s) => s.isNotEmpty).toList();
+  }
+
+  static String? _encodeVolumes(List<StandardWork> volumes) {
+    if (volumes.isEmpty) return null;
+    return volumes.map((v) => v.apiVolumeId).join(_listSeparator);
+  }
+
+  static List<StandardWork> _decodeVolumes(String? raw) {
+    if (raw == null || raw.isEmpty) return const [];
+    return raw
+        .split(_listSeparator)
+        .where((s) => s.isNotEmpty)
+        .map(_volumeFromApiId)
+        .toList();
   }
 
   static StandardWork _volumeFromApiId(String id) => switch (id) {

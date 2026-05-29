@@ -31,3 +31,9 @@ class LocalScriptureConfig {
 class DbConfig {
   static const fileName = 'scriptures_app';
 }
+
+/// User-defined tag rules.
+class TagConfig {
+  /// Maximum characters per tag (enforced at input).
+  static const maxLength = 15;
+}

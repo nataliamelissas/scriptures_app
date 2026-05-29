@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/study_project.dart';
 import '../providers/providers.dart';
+import '../widgets/tag_editor.dart';
 import 'archived_projects_screen.dart';
 import 'books_screen.dart';
+import 'project_settings_screen.dart';
 import 'reader_screen.dart';
 import 'volumes_screen.dart';
 
@@ -50,49 +52,66 @@ class HomeScreen extends ConsumerWidget {
   Future<void> _showCreateDialog(BuildContext context, WidgetRef ref) async {
     final nameController = TextEditingController();
     final descController = TextEditingController();
+    var tags = <String>[];
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('New Study Project'),
-        content: SizedBox(
-          width: 360,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Name',
-                  hintText: 'e.g. "Family Study 2026"',
-                ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocalState) => AlertDialog(
+          title: const Text('New Study Project'),
+          content: SizedBox(
+            width: 360,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Name',
+                      hintText: 'e.g. "Family Study 2026"',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: descController,
+                    decoration: const InputDecoration(
+                      labelText: 'Description (optional)',
+                      hintText: 'What is this study about?',
+                      alignLabelWithHint: true,
+                    ),
+                    minLines: 2,
+                    maxLines: 2,
+                    keyboardType: TextInputType.multiline,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Tags (optional)',
+                    style: Theme.of(ctx).textTheme.labelMedium,
+                  ),
+                  const SizedBox(height: 6),
+                  TagEditor(
+                    tags: tags,
+                    onChanged: (next) => setLocalState(() => tags = next),
+                    hint: 'e.g. "hope"',
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: descController,
-                decoration: const InputDecoration(
-                  labelText: 'Description (optional)',
-                  hintText: 'What is this study about?',
-                  alignLabelWithHint: true,
-                ),
-                minLines: 2,
-                maxLines: 2,
-                keyboardType: TextInputType.multiline,
-              ),
-            ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Create'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Create'),
-          ),
-        ],
       ),
     );
 
@@ -102,6 +121,7 @@ class HomeScreen extends ConsumerWidget {
             description: descController.text.trim().isEmpty
                 ? null
                 : descController.text.trim(),
+            tags: tags,
           );
 
       if (context.mounted) {
@@ -209,8 +229,8 @@ class _ProjectList extends ConsumerWidget {
                         ],
                         const SizedBox(height: 4),
                         Text(
-                          project.lastPosition != null
-                              ? 'Reading: ${project.lastPosition!.bookTitle} ${project.lastPosition!.chapter}'
+                          project.activePosition != null
+                              ? 'Reading: ${project.activePosition!.bookTitle} ${project.activePosition!.chapter}'
                               : 'Not started',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.primary,
@@ -256,37 +276,50 @@ class _ProjectList extends ConsumerWidget {
     );
   }
 
-  /// Open a project tile: resume reading where the user left off, or — if
-  /// they never started — open the books list for the project's default
-  /// volume. We never route through the Standard Works picker here; that
-  /// lives behind the per-project Settings menu.
+  /// Open a project tile.
+  ///
+  /// * 0 volumes → kick the user through the volume picker as initial setup.
+  /// * 1 volume → resume its saved position, or open its books list.
+  /// * 2+ volumes → always show the project's volume picker so the user
+  ///   can choose which one to continue with.
   void _openProject(BuildContext context, WidgetRef ref, StudyProject project) {
     ref.read(selectedProjectProvider.notifier).state = project;
-    final pos = project.lastPosition;
-    if (pos != null) {
+
+    if (project.volumes.length >= 2) {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => ReaderScreen(
-            project: project,
-            volume: pos.volume,
-            bookApiId: pos.bookApiId,
-            bookTitle: pos.bookTitle,
-            initialChapter: pos.chapter,
-            initialVerse: pos.verseNumber,
-          ),
+          builder: (_) => VolumesScreen(project: project),
         ),
       );
       return;
     }
-    final volume = project.defaultVolume;
-    if (volume != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => BooksScreen(project: project, volume: volume),
-        ),
-      );
+
+    if (project.volumes.length == 1) {
+      final volume = project.volumes.first;
+      final pos = project.positions[volume];
+      if (pos != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ReaderScreen(
+              project: project,
+              volume: pos.volume,
+              bookApiId: pos.bookApiId,
+              bookTitle: pos.bookTitle,
+              initialChapter: pos.chapter,
+              initialVerse: pos.verseNumber,
+            ),
+          ),
+        );
+      } else {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => BooksScreen(project: project, volume: volume),
+          ),
+        );
+      }
       return;
     }
     // Fallback: no position and no default volume — send them through the
@@ -306,7 +339,7 @@ class _ProjectList extends ConsumerWidget {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => VolumesScreen(project: project),
+        builder: (_) => ProjectSettingsScreen(project: project),
       ),
     );
   }

@@ -58,13 +58,15 @@ class StudyProjectsNotifier extends AsyncNotifier<List<StudyProject>> {
   Future<StudyProject> create(
     String name, {
     String? description,
-    StandardWork? defaultVolume,
+    List<String> tags = const [],
+    List<StandardWork> volumes = const [],
   }) async {
     final repo = ref.read(projectRepositoryProvider);
     final project = await repo.create(
       name,
       description: description,
-      defaultVolume: defaultVolume,
+      tags: tags,
+      volumes: volumes,
     );
     ref.invalidateSelf();
     return project;
@@ -83,22 +85,77 @@ class StudyProjectsNotifier extends AsyncNotifier<List<StudyProject>> {
     ref.invalidate(archivedProjectsProvider);
   }
 
-  Future<void> setDefaultVolume(
-    StudyProject project,
-    StandardWork volume,
-  ) async {
-    final updated = project.copyWith(defaultVolume: volume);
+  /// Edit name / description / tags. Pass null for any field to leave it
+  /// unchanged.
+  Future<void> updateProject(
+    StudyProject project, {
+    String? name,
+    String? description,
+    List<String>? tags,
+  }) async {
+    final updated = project.copyWith(
+      name: name,
+      description: description,
+      tags: tags,
+    );
     await ref.read(projectRepositoryProvider).update(updated);
     ref.invalidateSelf();
   }
 
+  /// Add a standard work to the project. No-op if already present. The
+  /// newly-added volume becomes the active volume if none was set.
+  Future<StudyProject> addVolume(
+    StudyProject project,
+    StandardWork volume,
+  ) async {
+    if (project.volumes.contains(volume)) return project;
+    final updated = project.copyWith(
+      volumes: [...project.volumes, volume],
+      activeVolume: project.activeVolume ?? volume,
+    );
+    await ref.read(projectRepositoryProvider).update(updated);
+    ref.invalidateSelf();
+    return updated;
+  }
+
+  /// Remove a standard work and any saved reading position for it.
+  Future<void> removeVolume(
+    StudyProject project,
+    StandardWork volume,
+  ) async {
+    final newVolumes = project.volumes.where((v) => v != volume).toList();
+    final newPositions =
+        Map<StandardWork, ReadingPosition>.from(project.positions)
+          ..remove(volume);
+    final clearActive = project.activeVolume == volume;
+    final updated = project.copyWith(
+      volumes: newVolumes,
+      positions: newPositions,
+      activeVolume: clearActive ? null : project.activeVolume,
+      clearActiveVolume: clearActive,
+    );
+    await ref.read(projectRepositoryProvider).update(updated);
+    ref.invalidateSelf();
+  }
+
+  /// Save a reading position for the volume it belongs to. Also marks
+  /// that volume as the active one and bumps lastOpenedAt.
   Future<void> updatePosition(
     StudyProject project,
     ReadingPosition position,
   ) async {
+    final newPositions =
+        Map<StandardWork, ReadingPosition>.from(project.positions);
+    newPositions[position.volume] = position;
+    // Ensure the volume is registered on the project.
+    final newVolumes = project.volumes.contains(position.volume)
+        ? project.volumes
+        : [...project.volumes, position.volume];
     final updated = project.copyWith(
       lastOpenedAt: DateTime.now(),
-      lastPosition: position,
+      positions: newPositions,
+      volumes: newVolumes,
+      activeVolume: position.volume,
     );
     await ref.read(projectRepositoryProvider).update(updated);
     ref.invalidateSelf();

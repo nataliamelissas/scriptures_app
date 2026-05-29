@@ -11,7 +11,8 @@ abstract class ProjectRepository {
   Future<StudyProject> create(
     String name, {
     String? description,
-    StandardWork? defaultVolume,
+    List<String> tags,
+    List<StandardWork> volumes,
   });
   Future<void> update(StudyProject project);
   Future<void> setArchived(String projectId, bool archived);

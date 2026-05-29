@@ -4,14 +4,19 @@ import '../../domain/entities/scripture.dart';
 import '../../domain/entities/study_project.dart';
 import '../providers/providers.dart';
 import 'books_screen.dart';
+import 'reader_screen.dart';
 import 'study_plan_created_screen.dart';
 
-/// Displays the 5 standard works as a compact list.
+/// Volume selector. Two modes:
 ///
-/// [isInitialSetup] = true when this is the project-creation flow: picking a
-/// volume saves it as the project's default and routes to the
-/// "Start reading?" confirmation. Otherwise, picking a volume opens the
-/// books list directly (used by the project's Settings entry point).
+/// * [isInitialSetup] = true — project-creation flow. Shows all five
+///   standard works and the chosen one is added to the new project, then
+///   routes to the "Start reading?" confirmation.
+/// * [isInitialSetup] = false — multi-volume opener. Shows only the
+///   volumes already added to the project, each with its own reading
+///   progress. Tapping resumes that volume's reader (or opens books if
+///   the volume has no saved position yet). Adding new volumes happens
+///   from the project's Settings screen, not here.
 class VolumesScreen extends ConsumerWidget {
   final StudyProject project;
   final bool isInitialSetup;
@@ -24,6 +29,11 @@ class VolumesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final volumesToShow =
+        isInitialSetup ? StandardWork.values : project.volumes;
+    final subtitle = isInitialSetup
+        ? 'Choose a volume to study'
+        : 'Choose which volume to continue';
 
     return Scaffold(
       appBar: AppBar(
@@ -36,19 +46,18 @@ class VolumesScreen extends ConsumerWidget {
           children: [
             Text('Standard Works', style: theme.textTheme.headlineMedium),
             const SizedBox(height: 6),
-            Text(
-              'Choose a volume to study',
-              style: theme.textTheme.bodyMedium,
-            ),
+            Text(subtitle, style: theme.textTheme.bodyMedium),
             const SizedBox(height: 24),
             Expanded(
               child: ListView.separated(
-                itemCount: StandardWork.values.length,
+                itemCount: volumesToShow.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 8),
                 itemBuilder: (context, i) {
-                  final volume = StandardWork.values[i];
+                  final volume = volumesToShow[i];
                   return _VolumeCard(
                     volume: volume,
+                    position:
+                        isInitialSetup ? null : project.positions[volume],
                     onTap: () => _onVolumeTap(context, ref, volume),
                   );
                 },
@@ -66,11 +75,10 @@ class VolumesScreen extends ConsumerWidget {
     StandardWork volume,
   ) async {
     if (isInitialSetup) {
-      await ref
+      final updated = await ref
           .read(studyProjectsProvider.notifier)
-          .setDefaultVolume(project, volume);
+          .addVolume(project, volume);
       if (!context.mounted) return;
-      final updated = project.copyWith(defaultVolume: volume);
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -80,19 +88,30 @@ class VolumesScreen extends ConsumerWidget {
           ),
         ),
       );
-    } else {
-      // Settings flow: also persist as new default, then jump into the books.
-      await ref
-          .read(studyProjectsProvider.notifier)
-          .setDefaultVolume(project, volume);
-      if (!context.mounted) return;
+      return;
+    }
+
+    // Multi-volume opener: resume that volume's saved position if any.
+    final pos = project.positions[volume];
+    if (pos != null) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => BooksScreen(
-            project: project.copyWith(defaultVolume: volume),
-            volume: volume,
+          builder: (_) => ReaderScreen(
+            project: project,
+            volume: pos.volume,
+            bookApiId: pos.bookApiId,
+            bookTitle: pos.bookTitle,
+            initialChapter: pos.chapter,
+            initialVerse: pos.verseNumber,
           ),
+        ),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BooksScreen(project: project, volume: volume),
         ),
       );
     }
@@ -101,8 +120,13 @@ class VolumesScreen extends ConsumerWidget {
 
 class _VolumeCard extends StatelessWidget {
   final StandardWork volume;
+  final ReadingPosition? position;
   final VoidCallback onTap;
-  const _VolumeCard({required this.volume, required this.onTap});
+  const _VolumeCard({
+    required this.volume,
+    required this.onTap,
+    this.position,
+  });
 
   IconData get _icon => switch (volume) {
         StandardWork.oldTestament => Icons.history_edu_rounded,
@@ -115,6 +139,7 @@ class _VolumeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final pos = position;
     return Card(
       margin: EdgeInsets.zero,
       child: InkWell(
@@ -127,11 +152,27 @@ class _VolumeCard extends StatelessWidget {
               Icon(_icon, size: 22, color: theme.colorScheme.primary),
               const SizedBox(width: 14),
               Expanded(
-                child: Text(
-                  volume.displayName,
-                  style: theme.textTheme.titleMedium,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      volume.displayName,
+                      style: theme.textTheme.titleMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (pos != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Reading: ${pos.bookTitle} ${pos.chapter}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
                 ),
               ),
               Icon(

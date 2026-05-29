@@ -136,6 +136,37 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _tagsMeta = const VerificationMeta('tags');
+  @override
+  late final GeneratedColumn<String> tags = GeneratedColumn<String>(
+    'tags',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _volumesMeta = const VerificationMeta(
+    'volumes',
+  );
+  @override
+  late final GeneratedColumn<String> volumes = GeneratedColumn<String>(
+    'volumes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _activeVolumeIdMeta = const VerificationMeta(
+    'activeVolumeId',
+  );
+  @override
+  late final GeneratedColumn<String> activeVolumeId = GeneratedColumn<String>(
+    'active_volume_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -150,6 +181,9 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
     lastBookTitle,
     lastChapter,
     lastVerse,
+    tags,
+    volumes,
+    activeVolumeId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -258,6 +292,27 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
         lastVerse.isAcceptableOrUnknown(data['last_verse']!, _lastVerseMeta),
       );
     }
+    if (data.containsKey('tags')) {
+      context.handle(
+        _tagsMeta,
+        tags.isAcceptableOrUnknown(data['tags']!, _tagsMeta),
+      );
+    }
+    if (data.containsKey('volumes')) {
+      context.handle(
+        _volumesMeta,
+        volumes.isAcceptableOrUnknown(data['volumes']!, _volumesMeta),
+      );
+    }
+    if (data.containsKey('active_volume_id')) {
+      context.handle(
+        _activeVolumeIdMeta,
+        activeVolumeId.isAcceptableOrUnknown(
+          data['active_volume_id']!,
+          _activeVolumeIdMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -315,6 +370,18 @@ class $ProjectsTable extends Projects with TableInfo<$ProjectsTable, Project> {
         DriftSqlType.int,
         data['${effectivePrefix}last_verse'],
       ),
+      tags: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tags'],
+      ),
+      volumes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}volumes'],
+      ),
+      activeVolumeId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}active_volume_id'],
+      ),
     );
   }
 
@@ -337,6 +404,9 @@ class Project extends DataClass implements Insertable<Project> {
   final String? lastBookTitle;
   final int? lastChapter;
   final int? lastVerse;
+  final String? tags;
+  final String? volumes;
+  final String? activeVolumeId;
   const Project({
     required this.id,
     required this.name,
@@ -350,6 +420,9 @@ class Project extends DataClass implements Insertable<Project> {
     this.lastBookTitle,
     this.lastChapter,
     this.lastVerse,
+    this.tags,
+    this.volumes,
+    this.activeVolumeId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -381,6 +454,15 @@ class Project extends DataClass implements Insertable<Project> {
     }
     if (!nullToAbsent || lastVerse != null) {
       map['last_verse'] = Variable<int>(lastVerse);
+    }
+    if (!nullToAbsent || tags != null) {
+      map['tags'] = Variable<String>(tags);
+    }
+    if (!nullToAbsent || volumes != null) {
+      map['volumes'] = Variable<String>(volumes);
+    }
+    if (!nullToAbsent || activeVolumeId != null) {
+      map['active_volume_id'] = Variable<String>(activeVolumeId);
     }
     return map;
   }
@@ -415,6 +497,13 @@ class Project extends DataClass implements Insertable<Project> {
       lastVerse: lastVerse == null && nullToAbsent
           ? const Value.absent()
           : Value(lastVerse),
+      tags: tags == null && nullToAbsent ? const Value.absent() : Value(tags),
+      volumes: volumes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(volumes),
+      activeVolumeId: activeVolumeId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(activeVolumeId),
     );
   }
 
@@ -436,6 +525,9 @@ class Project extends DataClass implements Insertable<Project> {
       lastBookTitle: serializer.fromJson<String?>(json['lastBookTitle']),
       lastChapter: serializer.fromJson<int?>(json['lastChapter']),
       lastVerse: serializer.fromJson<int?>(json['lastVerse']),
+      tags: serializer.fromJson<String?>(json['tags']),
+      volumes: serializer.fromJson<String?>(json['volumes']),
+      activeVolumeId: serializer.fromJson<String?>(json['activeVolumeId']),
     );
   }
   @override
@@ -454,6 +546,9 @@ class Project extends DataClass implements Insertable<Project> {
       'lastBookTitle': serializer.toJson<String?>(lastBookTitle),
       'lastChapter': serializer.toJson<int?>(lastChapter),
       'lastVerse': serializer.toJson<int?>(lastVerse),
+      'tags': serializer.toJson<String?>(tags),
+      'volumes': serializer.toJson<String?>(volumes),
+      'activeVolumeId': serializer.toJson<String?>(activeVolumeId),
     };
   }
 
@@ -470,6 +565,9 @@ class Project extends DataClass implements Insertable<Project> {
     Value<String?> lastBookTitle = const Value.absent(),
     Value<int?> lastChapter = const Value.absent(),
     Value<int?> lastVerse = const Value.absent(),
+    Value<String?> tags = const Value.absent(),
+    Value<String?> volumes = const Value.absent(),
+    Value<String?> activeVolumeId = const Value.absent(),
   }) => Project(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -489,6 +587,11 @@ class Project extends DataClass implements Insertable<Project> {
         : this.lastBookTitle,
     lastChapter: lastChapter.present ? lastChapter.value : this.lastChapter,
     lastVerse: lastVerse.present ? lastVerse.value : this.lastVerse,
+    tags: tags.present ? tags.value : this.tags,
+    volumes: volumes.present ? volumes.value : this.volumes,
+    activeVolumeId: activeVolumeId.present
+        ? activeVolumeId.value
+        : this.activeVolumeId,
   );
   Project copyWithCompanion(ProjectsCompanion data) {
     return Project(
@@ -520,6 +623,11 @@ class Project extends DataClass implements Insertable<Project> {
           ? data.lastChapter.value
           : this.lastChapter,
       lastVerse: data.lastVerse.present ? data.lastVerse.value : this.lastVerse,
+      tags: data.tags.present ? data.tags.value : this.tags,
+      volumes: data.volumes.present ? data.volumes.value : this.volumes,
+      activeVolumeId: data.activeVolumeId.present
+          ? data.activeVolumeId.value
+          : this.activeVolumeId,
     );
   }
 
@@ -537,7 +645,10 @@ class Project extends DataClass implements Insertable<Project> {
           ..write('lastBookApiId: $lastBookApiId, ')
           ..write('lastBookTitle: $lastBookTitle, ')
           ..write('lastChapter: $lastChapter, ')
-          ..write('lastVerse: $lastVerse')
+          ..write('lastVerse: $lastVerse, ')
+          ..write('tags: $tags, ')
+          ..write('volumes: $volumes, ')
+          ..write('activeVolumeId: $activeVolumeId')
           ..write(')'))
         .toString();
   }
@@ -556,6 +667,9 @@ class Project extends DataClass implements Insertable<Project> {
     lastBookTitle,
     lastChapter,
     lastVerse,
+    tags,
+    volumes,
+    activeVolumeId,
   );
   @override
   bool operator ==(Object other) =>
@@ -572,7 +686,10 @@ class Project extends DataClass implements Insertable<Project> {
           other.lastBookApiId == this.lastBookApiId &&
           other.lastBookTitle == this.lastBookTitle &&
           other.lastChapter == this.lastChapter &&
-          other.lastVerse == this.lastVerse);
+          other.lastVerse == this.lastVerse &&
+          other.tags == this.tags &&
+          other.volumes == this.volumes &&
+          other.activeVolumeId == this.activeVolumeId);
 }
 
 class ProjectsCompanion extends UpdateCompanion<Project> {
@@ -588,6 +705,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
   final Value<String?> lastBookTitle;
   final Value<int?> lastChapter;
   final Value<int?> lastVerse;
+  final Value<String?> tags;
+  final Value<String?> volumes;
+  final Value<String?> activeVolumeId;
   final Value<int> rowid;
   const ProjectsCompanion({
     this.id = const Value.absent(),
@@ -602,6 +722,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     this.lastBookTitle = const Value.absent(),
     this.lastChapter = const Value.absent(),
     this.lastVerse = const Value.absent(),
+    this.tags = const Value.absent(),
+    this.volumes = const Value.absent(),
+    this.activeVolumeId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   ProjectsCompanion.insert({
@@ -617,6 +740,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     this.lastBookTitle = const Value.absent(),
     this.lastChapter = const Value.absent(),
     this.lastVerse = const Value.absent(),
+    this.tags = const Value.absent(),
+    this.volumes = const Value.absent(),
+    this.activeVolumeId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        name = Value(name),
@@ -635,6 +761,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     Expression<String>? lastBookTitle,
     Expression<int>? lastChapter,
     Expression<int>? lastVerse,
+    Expression<String>? tags,
+    Expression<String>? volumes,
+    Expression<String>? activeVolumeId,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -650,6 +779,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
       if (lastBookTitle != null) 'last_book_title': lastBookTitle,
       if (lastChapter != null) 'last_chapter': lastChapter,
       if (lastVerse != null) 'last_verse': lastVerse,
+      if (tags != null) 'tags': tags,
+      if (volumes != null) 'volumes': volumes,
+      if (activeVolumeId != null) 'active_volume_id': activeVolumeId,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -667,6 +799,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     Value<String?>? lastBookTitle,
     Value<int?>? lastChapter,
     Value<int?>? lastVerse,
+    Value<String?>? tags,
+    Value<String?>? volumes,
+    Value<String?>? activeVolumeId,
     Value<int>? rowid,
   }) {
     return ProjectsCompanion(
@@ -682,6 +817,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
       lastBookTitle: lastBookTitle ?? this.lastBookTitle,
       lastChapter: lastChapter ?? this.lastChapter,
       lastVerse: lastVerse ?? this.lastVerse,
+      tags: tags ?? this.tags,
+      volumes: volumes ?? this.volumes,
+      activeVolumeId: activeVolumeId ?? this.activeVolumeId,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -725,6 +863,15 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
     if (lastVerse.present) {
       map['last_verse'] = Variable<int>(lastVerse.value);
     }
+    if (tags.present) {
+      map['tags'] = Variable<String>(tags.value);
+    }
+    if (volumes.present) {
+      map['volumes'] = Variable<String>(volumes.value);
+    }
+    if (activeVolumeId.present) {
+      map['active_volume_id'] = Variable<String>(activeVolumeId.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -746,6 +893,9 @@ class ProjectsCompanion extends UpdateCompanion<Project> {
           ..write('lastBookTitle: $lastBookTitle, ')
           ..write('lastChapter: $lastChapter, ')
           ..write('lastVerse: $lastVerse, ')
+          ..write('tags: $tags, ')
+          ..write('volumes: $volumes, ')
+          ..write('activeVolumeId: $activeVolumeId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1372,6 +1522,434 @@ class NotesCompanion extends UpdateCompanion<Note> {
   }
 }
 
+class $ProjectPositionsTable extends ProjectPositions
+    with TableInfo<$ProjectPositionsTable, ProjectPosition> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ProjectPositionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _projectIdMeta = const VerificationMeta(
+    'projectId',
+  );
+  @override
+  late final GeneratedColumn<String> projectId = GeneratedColumn<String>(
+    'project_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES projects (id)',
+    ),
+  );
+  static const VerificationMeta _volumeMeta = const VerificationMeta('volume');
+  @override
+  late final GeneratedColumn<String> volume = GeneratedColumn<String>(
+    'volume',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bookApiIdMeta = const VerificationMeta(
+    'bookApiId',
+  );
+  @override
+  late final GeneratedColumn<String> bookApiId = GeneratedColumn<String>(
+    'book_api_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bookTitleMeta = const VerificationMeta(
+    'bookTitle',
+  );
+  @override
+  late final GeneratedColumn<String> bookTitle = GeneratedColumn<String>(
+    'book_title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _chapterMeta = const VerificationMeta(
+    'chapter',
+  );
+  @override
+  late final GeneratedColumn<int> chapter = GeneratedColumn<int>(
+    'chapter',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _verseNumberMeta = const VerificationMeta(
+    'verseNumber',
+  );
+  @override
+  late final GeneratedColumn<int> verseNumber = GeneratedColumn<int>(
+    'verse_number',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    projectId,
+    volume,
+    bookApiId,
+    bookTitle,
+    chapter,
+    verseNumber,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'project_positions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ProjectPosition> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('project_id')) {
+      context.handle(
+        _projectIdMeta,
+        projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('volume')) {
+      context.handle(
+        _volumeMeta,
+        volume.isAcceptableOrUnknown(data['volume']!, _volumeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_volumeMeta);
+    }
+    if (data.containsKey('book_api_id')) {
+      context.handle(
+        _bookApiIdMeta,
+        bookApiId.isAcceptableOrUnknown(data['book_api_id']!, _bookApiIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bookApiIdMeta);
+    }
+    if (data.containsKey('book_title')) {
+      context.handle(
+        _bookTitleMeta,
+        bookTitle.isAcceptableOrUnknown(data['book_title']!, _bookTitleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bookTitleMeta);
+    }
+    if (data.containsKey('chapter')) {
+      context.handle(
+        _chapterMeta,
+        chapter.isAcceptableOrUnknown(data['chapter']!, _chapterMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_chapterMeta);
+    }
+    if (data.containsKey('verse_number')) {
+      context.handle(
+        _verseNumberMeta,
+        verseNumber.isAcceptableOrUnknown(
+          data['verse_number']!,
+          _verseNumberMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {projectId, volume};
+  @override
+  ProjectPosition map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ProjectPosition(
+      projectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}project_id'],
+      )!,
+      volume: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}volume'],
+      )!,
+      bookApiId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}book_api_id'],
+      )!,
+      bookTitle: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}book_title'],
+      )!,
+      chapter: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}chapter'],
+      )!,
+      verseNumber: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}verse_number'],
+      ),
+    );
+  }
+
+  @override
+  $ProjectPositionsTable createAlias(String alias) {
+    return $ProjectPositionsTable(attachedDatabase, alias);
+  }
+}
+
+class ProjectPosition extends DataClass implements Insertable<ProjectPosition> {
+  final String projectId;
+  final String volume;
+  final String bookApiId;
+  final String bookTitle;
+  final int chapter;
+  final int? verseNumber;
+  const ProjectPosition({
+    required this.projectId,
+    required this.volume,
+    required this.bookApiId,
+    required this.bookTitle,
+    required this.chapter,
+    this.verseNumber,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['project_id'] = Variable<String>(projectId);
+    map['volume'] = Variable<String>(volume);
+    map['book_api_id'] = Variable<String>(bookApiId);
+    map['book_title'] = Variable<String>(bookTitle);
+    map['chapter'] = Variable<int>(chapter);
+    if (!nullToAbsent || verseNumber != null) {
+      map['verse_number'] = Variable<int>(verseNumber);
+    }
+    return map;
+  }
+
+  ProjectPositionsCompanion toCompanion(bool nullToAbsent) {
+    return ProjectPositionsCompanion(
+      projectId: Value(projectId),
+      volume: Value(volume),
+      bookApiId: Value(bookApiId),
+      bookTitle: Value(bookTitle),
+      chapter: Value(chapter),
+      verseNumber: verseNumber == null && nullToAbsent
+          ? const Value.absent()
+          : Value(verseNumber),
+    );
+  }
+
+  factory ProjectPosition.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ProjectPosition(
+      projectId: serializer.fromJson<String>(json['projectId']),
+      volume: serializer.fromJson<String>(json['volume']),
+      bookApiId: serializer.fromJson<String>(json['bookApiId']),
+      bookTitle: serializer.fromJson<String>(json['bookTitle']),
+      chapter: serializer.fromJson<int>(json['chapter']),
+      verseNumber: serializer.fromJson<int?>(json['verseNumber']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'projectId': serializer.toJson<String>(projectId),
+      'volume': serializer.toJson<String>(volume),
+      'bookApiId': serializer.toJson<String>(bookApiId),
+      'bookTitle': serializer.toJson<String>(bookTitle),
+      'chapter': serializer.toJson<int>(chapter),
+      'verseNumber': serializer.toJson<int?>(verseNumber),
+    };
+  }
+
+  ProjectPosition copyWith({
+    String? projectId,
+    String? volume,
+    String? bookApiId,
+    String? bookTitle,
+    int? chapter,
+    Value<int?> verseNumber = const Value.absent(),
+  }) => ProjectPosition(
+    projectId: projectId ?? this.projectId,
+    volume: volume ?? this.volume,
+    bookApiId: bookApiId ?? this.bookApiId,
+    bookTitle: bookTitle ?? this.bookTitle,
+    chapter: chapter ?? this.chapter,
+    verseNumber: verseNumber.present ? verseNumber.value : this.verseNumber,
+  );
+  ProjectPosition copyWithCompanion(ProjectPositionsCompanion data) {
+    return ProjectPosition(
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      volume: data.volume.present ? data.volume.value : this.volume,
+      bookApiId: data.bookApiId.present ? data.bookApiId.value : this.bookApiId,
+      bookTitle: data.bookTitle.present ? data.bookTitle.value : this.bookTitle,
+      chapter: data.chapter.present ? data.chapter.value : this.chapter,
+      verseNumber: data.verseNumber.present
+          ? data.verseNumber.value
+          : this.verseNumber,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProjectPosition(')
+          ..write('projectId: $projectId, ')
+          ..write('volume: $volume, ')
+          ..write('bookApiId: $bookApiId, ')
+          ..write('bookTitle: $bookTitle, ')
+          ..write('chapter: $chapter, ')
+          ..write('verseNumber: $verseNumber')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    projectId,
+    volume,
+    bookApiId,
+    bookTitle,
+    chapter,
+    verseNumber,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ProjectPosition &&
+          other.projectId == this.projectId &&
+          other.volume == this.volume &&
+          other.bookApiId == this.bookApiId &&
+          other.bookTitle == this.bookTitle &&
+          other.chapter == this.chapter &&
+          other.verseNumber == this.verseNumber);
+}
+
+class ProjectPositionsCompanion extends UpdateCompanion<ProjectPosition> {
+  final Value<String> projectId;
+  final Value<String> volume;
+  final Value<String> bookApiId;
+  final Value<String> bookTitle;
+  final Value<int> chapter;
+  final Value<int?> verseNumber;
+  final Value<int> rowid;
+  const ProjectPositionsCompanion({
+    this.projectId = const Value.absent(),
+    this.volume = const Value.absent(),
+    this.bookApiId = const Value.absent(),
+    this.bookTitle = const Value.absent(),
+    this.chapter = const Value.absent(),
+    this.verseNumber = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ProjectPositionsCompanion.insert({
+    required String projectId,
+    required String volume,
+    required String bookApiId,
+    required String bookTitle,
+    required int chapter,
+    this.verseNumber = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : projectId = Value(projectId),
+       volume = Value(volume),
+       bookApiId = Value(bookApiId),
+       bookTitle = Value(bookTitle),
+       chapter = Value(chapter);
+  static Insertable<ProjectPosition> custom({
+    Expression<String>? projectId,
+    Expression<String>? volume,
+    Expression<String>? bookApiId,
+    Expression<String>? bookTitle,
+    Expression<int>? chapter,
+    Expression<int>? verseNumber,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (projectId != null) 'project_id': projectId,
+      if (volume != null) 'volume': volume,
+      if (bookApiId != null) 'book_api_id': bookApiId,
+      if (bookTitle != null) 'book_title': bookTitle,
+      if (chapter != null) 'chapter': chapter,
+      if (verseNumber != null) 'verse_number': verseNumber,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ProjectPositionsCompanion copyWith({
+    Value<String>? projectId,
+    Value<String>? volume,
+    Value<String>? bookApiId,
+    Value<String>? bookTitle,
+    Value<int>? chapter,
+    Value<int?>? verseNumber,
+    Value<int>? rowid,
+  }) {
+    return ProjectPositionsCompanion(
+      projectId: projectId ?? this.projectId,
+      volume: volume ?? this.volume,
+      bookApiId: bookApiId ?? this.bookApiId,
+      bookTitle: bookTitle ?? this.bookTitle,
+      chapter: chapter ?? this.chapter,
+      verseNumber: verseNumber ?? this.verseNumber,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (projectId.present) {
+      map['project_id'] = Variable<String>(projectId.value);
+    }
+    if (volume.present) {
+      map['volume'] = Variable<String>(volume.value);
+    }
+    if (bookApiId.present) {
+      map['book_api_id'] = Variable<String>(bookApiId.value);
+    }
+    if (bookTitle.present) {
+      map['book_title'] = Variable<String>(bookTitle.value);
+    }
+    if (chapter.present) {
+      map['chapter'] = Variable<int>(chapter.value);
+    }
+    if (verseNumber.present) {
+      map['verse_number'] = Variable<int>(verseNumber.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProjectPositionsCompanion(')
+          ..write('projectId: $projectId, ')
+          ..write('volume: $volume, ')
+          ..write('bookApiId: $bookApiId, ')
+          ..write('bookTitle: $bookTitle, ')
+          ..write('chapter: $chapter, ')
+          ..write('verseNumber: $verseNumber, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $CachedChaptersTable extends CachedChapters
     with TableInfo<$CachedChaptersTable, CachedChapter> {
   @override
@@ -1753,6 +2331,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $ProjectsTable projects = $ProjectsTable(this);
   late final $NotesTable notes = $NotesTable(this);
+  late final $ProjectPositionsTable projectPositions = $ProjectPositionsTable(
+    this,
+  );
   late final $CachedChaptersTable cachedChapters = $CachedChaptersTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -1761,6 +2342,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     projects,
     notes,
+    projectPositions,
     cachedChapters,
   ];
 }
@@ -1779,6 +2361,9 @@ typedef $$ProjectsTableCreateCompanionBuilder =
       Value<String?> lastBookTitle,
       Value<int?> lastChapter,
       Value<int?> lastVerse,
+      Value<String?> tags,
+      Value<String?> volumes,
+      Value<String?> activeVolumeId,
       Value<int> rowid,
     });
 typedef $$ProjectsTableUpdateCompanionBuilder =
@@ -1795,6 +2380,9 @@ typedef $$ProjectsTableUpdateCompanionBuilder =
       Value<String?> lastBookTitle,
       Value<int?> lastChapter,
       Value<int?> lastVerse,
+      Value<String?> tags,
+      Value<String?> volumes,
+      Value<String?> activeVolumeId,
       Value<int> rowid,
     });
 
@@ -1816,6 +2404,29 @@ final class $$ProjectsTableReferences
     ).filter((f) => f.projectId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_notesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$ProjectPositionsTable, List<ProjectPosition>>
+  _projectPositionsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.projectPositions,
+    aliasName: $_aliasNameGenerator(
+      db.projects.id,
+      db.projectPositions.projectId,
+    ),
+  );
+
+  $$ProjectPositionsTableProcessedTableManager get projectPositionsRefs {
+    final manager = $$ProjectPositionsTableTableManager(
+      $_db,
+      $_db.projectPositions,
+    ).filter((f) => f.projectId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _projectPositionsRefsTable($_db),
+    );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -1891,6 +2502,21 @@ class $$ProjectsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get tags => $composableBuilder(
+    column: $table.tags,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get volumes => $composableBuilder(
+    column: $table.volumes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get activeVolumeId => $composableBuilder(
+    column: $table.activeVolumeId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   Expression<bool> notesRefs(
     Expression<bool> Function($$NotesTableFilterComposer f) f,
   ) {
@@ -1907,6 +2533,31 @@ class $$ProjectsTableFilterComposer
           }) => $$NotesTableFilterComposer(
             $db: $db,
             $table: $db.notes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> projectPositionsRefs(
+    Expression<bool> Function($$ProjectPositionsTableFilterComposer f) f,
+  ) {
+    final $$ProjectPositionsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.projectPositions,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectPositionsTableFilterComposer(
+            $db: $db,
+            $table: $db.projectPositions,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -1985,6 +2636,21 @@ class $$ProjectsTableOrderingComposer
     column: $table.lastVerse,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get tags => $composableBuilder(
+    column: $table.tags,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get volumes => $composableBuilder(
+    column: $table.volumes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get activeVolumeId => $composableBuilder(
+    column: $table.activeVolumeId,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$ProjectsTableAnnotationComposer
@@ -2048,6 +2714,17 @@ class $$ProjectsTableAnnotationComposer
   GeneratedColumn<int> get lastVerse =>
       $composableBuilder(column: $table.lastVerse, builder: (column) => column);
 
+  GeneratedColumn<String> get tags =>
+      $composableBuilder(column: $table.tags, builder: (column) => column);
+
+  GeneratedColumn<String> get volumes =>
+      $composableBuilder(column: $table.volumes, builder: (column) => column);
+
+  GeneratedColumn<String> get activeVolumeId => $composableBuilder(
+    column: $table.activeVolumeId,
+    builder: (column) => column,
+  );
+
   Expression<T> notesRefs<T extends Object>(
     Expression<T> Function($$NotesTableAnnotationComposer a) f,
   ) {
@@ -2072,6 +2749,31 @@ class $$ProjectsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> projectPositionsRefs<T extends Object>(
+    Expression<T> Function($$ProjectPositionsTableAnnotationComposer a) f,
+  ) {
+    final $$ProjectPositionsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.projectPositions,
+      getReferencedColumn: (t) => t.projectId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectPositionsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.projectPositions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$ProjectsTableTableManager
@@ -2087,7 +2789,7 @@ class $$ProjectsTableTableManager
           $$ProjectsTableUpdateCompanionBuilder,
           (Project, $$ProjectsTableReferences),
           Project,
-          PrefetchHooks Function({bool notesRefs})
+          PrefetchHooks Function({bool notesRefs, bool projectPositionsRefs})
         > {
   $$ProjectsTableTableManager(_$AppDatabase db, $ProjectsTable table)
     : super(
@@ -2114,6 +2816,9 @@ class $$ProjectsTableTableManager
                 Value<String?> lastBookTitle = const Value.absent(),
                 Value<int?> lastChapter = const Value.absent(),
                 Value<int?> lastVerse = const Value.absent(),
+                Value<String?> tags = const Value.absent(),
+                Value<String?> volumes = const Value.absent(),
+                Value<String?> activeVolumeId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ProjectsCompanion(
                 id: id,
@@ -2128,6 +2833,9 @@ class $$ProjectsTableTableManager
                 lastBookTitle: lastBookTitle,
                 lastChapter: lastChapter,
                 lastVerse: lastVerse,
+                tags: tags,
+                volumes: volumes,
+                activeVolumeId: activeVolumeId,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -2144,6 +2852,9 @@ class $$ProjectsTableTableManager
                 Value<String?> lastBookTitle = const Value.absent(),
                 Value<int?> lastChapter = const Value.absent(),
                 Value<int?> lastVerse = const Value.absent(),
+                Value<String?> tags = const Value.absent(),
+                Value<String?> volumes = const Value.absent(),
+                Value<String?> activeVolumeId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ProjectsCompanion.insert(
                 id: id,
@@ -2158,6 +2869,9 @@ class $$ProjectsTableTableManager
                 lastBookTitle: lastBookTitle,
                 lastChapter: lastChapter,
                 lastVerse: lastVerse,
+                tags: tags,
+                volumes: volumes,
+                activeVolumeId: activeVolumeId,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -2168,28 +2882,63 @@ class $$ProjectsTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({notesRefs = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [if (notesRefs) db.notes],
-              addJoins: null,
-              getPrefetchedDataCallback: (items) async {
-                return [
-                  if (notesRefs)
-                    await $_getPrefetchedData<Project, $ProjectsTable, Note>(
-                      currentTable: table,
-                      referencedTable: $$ProjectsTableReferences
-                          ._notesRefsTable(db),
-                      managerFromTypedResult: (p0) =>
-                          $$ProjectsTableReferences(db, table, p0).notesRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.projectId == item.id),
-                      typedResults: items,
-                    ),
-                ];
+          prefetchHooksCallback:
+              ({notesRefs = false, projectPositionsRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (notesRefs) db.notes,
+                    if (projectPositionsRefs) db.projectPositions,
+                  ],
+                  addJoins: null,
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (notesRefs)
+                        await $_getPrefetchedData<
+                          Project,
+                          $ProjectsTable,
+                          Note
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProjectsTableReferences
+                              ._notesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProjectsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).notesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.projectId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (projectPositionsRefs)
+                        await $_getPrefetchedData<
+                          Project,
+                          $ProjectsTable,
+                          ProjectPosition
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProjectsTableReferences
+                              ._projectPositionsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProjectsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).projectPositionsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.projectId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -2206,7 +2955,7 @@ typedef $$ProjectsTableProcessedTableManager =
       $$ProjectsTableUpdateCompanionBuilder,
       (Project, $$ProjectsTableReferences),
       Project,
-      PrefetchHooks Function({bool notesRefs})
+      PrefetchHooks Function({bool notesRefs, bool projectPositionsRefs})
     >;
 typedef $$NotesTableCreateCompanionBuilder =
     NotesCompanion Function({
@@ -2621,6 +3370,355 @@ typedef $$NotesTableProcessedTableManager =
       Note,
       PrefetchHooks Function({bool projectId})
     >;
+typedef $$ProjectPositionsTableCreateCompanionBuilder =
+    ProjectPositionsCompanion Function({
+      required String projectId,
+      required String volume,
+      required String bookApiId,
+      required String bookTitle,
+      required int chapter,
+      Value<int?> verseNumber,
+      Value<int> rowid,
+    });
+typedef $$ProjectPositionsTableUpdateCompanionBuilder =
+    ProjectPositionsCompanion Function({
+      Value<String> projectId,
+      Value<String> volume,
+      Value<String> bookApiId,
+      Value<String> bookTitle,
+      Value<int> chapter,
+      Value<int?> verseNumber,
+      Value<int> rowid,
+    });
+
+final class $$ProjectPositionsTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $ProjectPositionsTable, ProjectPosition> {
+  $$ProjectPositionsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $ProjectsTable _projectIdTable(_$AppDatabase db) =>
+      db.projects.createAlias(
+        $_aliasNameGenerator(db.projectPositions.projectId, db.projects.id),
+      );
+
+  $$ProjectsTableProcessedTableManager get projectId {
+    final $_column = $_itemColumn<String>('project_id')!;
+
+    final manager = $$ProjectsTableTableManager(
+      $_db,
+      $_db.projects,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_projectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ProjectPositionsTableFilterComposer
+    extends Composer<_$AppDatabase, $ProjectPositionsTable> {
+  $$ProjectPositionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get volume => $composableBuilder(
+    column: $table.volume,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bookApiId => $composableBuilder(
+    column: $table.bookApiId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bookTitle => $composableBuilder(
+    column: $table.bookTitle,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get chapter => $composableBuilder(
+    column: $table.chapter,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get verseNumber => $composableBuilder(
+    column: $table.verseNumber,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ProjectsTableFilterComposer get projectId {
+    final $$ProjectsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableFilterComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ProjectPositionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ProjectPositionsTable> {
+  $$ProjectPositionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get volume => $composableBuilder(
+    column: $table.volume,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bookApiId => $composableBuilder(
+    column: $table.bookApiId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bookTitle => $composableBuilder(
+    column: $table.bookTitle,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get chapter => $composableBuilder(
+    column: $table.chapter,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get verseNumber => $composableBuilder(
+    column: $table.verseNumber,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ProjectsTableOrderingComposer get projectId {
+    final $$ProjectsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableOrderingComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ProjectPositionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ProjectPositionsTable> {
+  $$ProjectPositionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get volume =>
+      $composableBuilder(column: $table.volume, builder: (column) => column);
+
+  GeneratedColumn<String> get bookApiId =>
+      $composableBuilder(column: $table.bookApiId, builder: (column) => column);
+
+  GeneratedColumn<String> get bookTitle =>
+      $composableBuilder(column: $table.bookTitle, builder: (column) => column);
+
+  GeneratedColumn<int> get chapter =>
+      $composableBuilder(column: $table.chapter, builder: (column) => column);
+
+  GeneratedColumn<int> get verseNumber => $composableBuilder(
+    column: $table.verseNumber,
+    builder: (column) => column,
+  );
+
+  $$ProjectsTableAnnotationComposer get projectId {
+    final $$ProjectsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.projectId,
+      referencedTable: $db.projects,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProjectsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.projects,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ProjectPositionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ProjectPositionsTable,
+          ProjectPosition,
+          $$ProjectPositionsTableFilterComposer,
+          $$ProjectPositionsTableOrderingComposer,
+          $$ProjectPositionsTableAnnotationComposer,
+          $$ProjectPositionsTableCreateCompanionBuilder,
+          $$ProjectPositionsTableUpdateCompanionBuilder,
+          (ProjectPosition, $$ProjectPositionsTableReferences),
+          ProjectPosition,
+          PrefetchHooks Function({bool projectId})
+        > {
+  $$ProjectPositionsTableTableManager(
+    _$AppDatabase db,
+    $ProjectPositionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ProjectPositionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ProjectPositionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ProjectPositionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> projectId = const Value.absent(),
+                Value<String> volume = const Value.absent(),
+                Value<String> bookApiId = const Value.absent(),
+                Value<String> bookTitle = const Value.absent(),
+                Value<int> chapter = const Value.absent(),
+                Value<int?> verseNumber = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ProjectPositionsCompanion(
+                projectId: projectId,
+                volume: volume,
+                bookApiId: bookApiId,
+                bookTitle: bookTitle,
+                chapter: chapter,
+                verseNumber: verseNumber,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String projectId,
+                required String volume,
+                required String bookApiId,
+                required String bookTitle,
+                required int chapter,
+                Value<int?> verseNumber = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ProjectPositionsCompanion.insert(
+                projectId: projectId,
+                volume: volume,
+                bookApiId: bookApiId,
+                bookTitle: bookTitle,
+                chapter: chapter,
+                verseNumber: verseNumber,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ProjectPositionsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({projectId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (projectId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.projectId,
+                                referencedTable:
+                                    $$ProjectPositionsTableReferences
+                                        ._projectIdTable(db),
+                                referencedColumn:
+                                    $$ProjectPositionsTableReferences
+                                        ._projectIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ProjectPositionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ProjectPositionsTable,
+      ProjectPosition,
+      $$ProjectPositionsTableFilterComposer,
+      $$ProjectPositionsTableOrderingComposer,
+      $$ProjectPositionsTableAnnotationComposer,
+      $$ProjectPositionsTableCreateCompanionBuilder,
+      $$ProjectPositionsTableUpdateCompanionBuilder,
+      (ProjectPosition, $$ProjectPositionsTableReferences),
+      ProjectPosition,
+      PrefetchHooks Function({bool projectId})
+    >;
 typedef $$CachedChaptersTableCreateCompanionBuilder =
     CachedChaptersCompanion Function({
       required String volume,
@@ -2835,6 +3933,8 @@ class $AppDatabaseManager {
       $$ProjectsTableTableManager(_db, _db.projects);
   $$NotesTableTableManager get notes =>
       $$NotesTableTableManager(_db, _db.notes);
+  $$ProjectPositionsTableTableManager get projectPositions =>
+      $$ProjectPositionsTableTableManager(_db, _db.projectPositions);
   $$CachedChaptersTableTableManager get cachedChapters =>
       $$CachedChaptersTableTableManager(_db, _db.cachedChapters);
 }
