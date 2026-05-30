@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -51,14 +52,21 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   late final StudyProjectsNotifier _projectsNotifier;
   DateTime _lastSaveAt = DateTime.fromMillisecondsSinceEpoch(0);
 
-  // ── Verses cached for gesture callbacks ─────────────────────────────────
+  // ── Verses & notes cached for gesture callbacks ──────────────────────────
   Map<int, ScriptureVerse> _versesByNumber = {};
+  Map<int, List<StudyNote>> _notesByVerse = {};
 
   // ── Gesture state ────────────────────────────────────────────────────────
   Offset? _pointerDownPos;
   bool _longPressRecognized = false;
   bool _isDragSelecting = false;
+  bool _isMouseDown = false;
   OverlayEntry? _circleOverlay;
+
+  // ── Handle + popup overlays ──────────────────────────────────────────────
+  OverlayEntry? _startHandleOverlay;
+  OverlayEntry? _endHandleOverlay;
+  OverlayEntry? _notePopupOverlay;
 
   @override
   void initState() {
@@ -78,6 +86,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     _scrollController.removeListener(_onScroll);
     _saveDebounce?.cancel();
     _removeLoadingCircle();
+    _removeHandleOverlays();
+    _removeNotePopup();
     _saveReadingPosition();
     _scrollController.dispose();
     super.dispose();
@@ -88,6 +98,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   void _onScroll() {
     if (_inRestoration) return;
     _recomputeTopVerse();
+    // Reposition handles when the list scrolls.
+    final active = ref.read(verseSelectionProvider).activeHighlight;
+    if (active != null) _updateHandleOverlays(active);
   }
 
   void _recomputeTopVerse() {
@@ -142,12 +155,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     if (chapter < 1) return;
     _saveDebounce?.cancel();
     ref.read(verseSelectionProvider.notifier).clearSelection();
+    _removeHandleOverlays();
+    _removeNotePopup();
     setState(() {
       _currentChapter = chapter;
       _topVerse = null;
       _verseKeys.clear();
       _wordKeys.clear();
       _versesByNumber = {};
+      _notesByVerse = {};
       _initialVerse = null;
       _pendingScrollToVerse = false;
       _inRestoration = false;
@@ -266,6 +282,33 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     return dx * dx + dy * dy;
   }
 
+  // ── Note lookup helpers ──────────────────────────────────────────────────
+
+  /// Returns the highlight [StudyNote] that covers [wordIndex] in [verseNum],
+  /// or null if no highlight does.
+  StudyNote? _highlightNoteForWord(int verseNum, int wordIndex) {
+    final highlights = (_notesByVerse[verseNum] ?? [])
+        .where((n) => n.type == NoteType.highlight)
+        .toList();
+    final wordCount =
+        VerseWidget.tokenize(_versesByNumber[verseNum]?.text ?? '').length;
+    for (final n in highlights) {
+      final (s, e) = VerseWidget.wordRangeForNote(n, verseNum, wordCount);
+      if (wordIndex >= s && wordIndex <= e) return n;
+    }
+    return null;
+  }
+
+  /// Returns true if [hit] (verse, word) falls within [note]'s highlight span.
+  bool _isWordInNote((int, int) hit, StudyNote note) {
+    final endVerse = note.endVerseNumber ?? note.verseNumber;
+    if (hit.$1 < note.verseNumber || hit.$1 > endVerse) return false;
+    final wordCount =
+        VerseWidget.tokenize(_versesByNumber[hit.$1]?.text ?? '').length;
+    final (s, e) = VerseWidget.wordRangeForNote(note, hit.$1, wordCount);
+    return hit.$2 >= s && hit.$2 <= e;
+  }
+
   // ── Loading circle overlay ───────────────────────────────────────────────
 
   void _showLoadingCircle(Offset position) {
@@ -281,16 +324,163 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     _circleOverlay = null;
   }
 
+  // ── Handle overlays ──────────────────────────────────────────────────────
+
+  void _updateHandleOverlays(StudyNote note) {
+    _removeHandleOverlays();
+
+    final startWordIdx = note.startWordIndex ?? 0;
+    final endVerse = note.endVerseNumber ?? note.verseNumber;
+    final endWords = VerseWidget.tokenize(_versesByNumber[endVerse]?.text ?? '');
+    final endWordIdx =
+        note.endWordIndex ?? (endWords.isEmpty ? 0 : endWords.length - 1);
+
+    final startKey = _wordKeys[note.verseNumber]?[startWordIdx];
+    final endKey = _wordKeys[endVerse]?[endWordIdx];
+
+    // Only show handles when both word containers are currently mounted.
+    if (startKey?.currentContext == null || endKey?.currentContext == null) return;
+
+    _startHandleOverlay = OverlayEntry(
+      builder: (_) => _HighlightHandle(
+        wordKey: startKey!,
+        isStart: true,
+        onDragStart: () =>
+            ref.read(verseSelectionProvider.notifier).beginHandleDrag(note),
+        onDragUpdate: (pos) => _onHandleDragUpdate(pos, isStart: true),
+        onDragEnd: _onHandleDragEnd,
+      ),
+    );
+    _endHandleOverlay = OverlayEntry(
+      builder: (_) => _HighlightHandle(
+        wordKey: endKey!,
+        isStart: false,
+        onDragStart: () =>
+            ref.read(verseSelectionProvider.notifier).beginHandleDrag(note),
+        onDragUpdate: (pos) => _onHandleDragUpdate(pos, isStart: false),
+        onDragEnd: _onHandleDragEnd,
+      ),
+    );
+
+    final overlay = Overlay.of(context);
+    overlay.insert(_startHandleOverlay!);
+    overlay.insert(_endHandleOverlay!);
+  }
+
+  void _removeHandleOverlays() {
+    _startHandleOverlay?.remove();
+    _startHandleOverlay = null;
+    _endHandleOverlay?.remove();
+    _endHandleOverlay = null;
+  }
+
+  void _onHandleDragUpdate(Offset globalPos, {required bool isStart}) {
+    final hit = _hitTest(globalPos);
+    if (hit == null) return;
+    final s = ref.read(verseSelectionProvider);
+    final note = s.activeHighlight;
+    if (note == null) return;
+
+    // Validate: start must not pass end and vice versa.
+    if (isStart) {
+      final endV = s.liveEndVerse ?? note.endVerseNumber ?? note.verseNumber;
+      final endW = s.liveEndWord ?? note.endWordIndex ?? 999;
+      if (hit.$1 > endV || (hit.$1 == endV && hit.$2 > endW)) return;
+    } else {
+      final startV = s.liveStartVerse ?? note.verseNumber;
+      final startW = s.liveStartWord ?? note.startWordIndex ?? 0;
+      if (hit.$1 < startV || (hit.$1 == startV && hit.$2 < startW)) return;
+    }
+
+    ref
+        .read(verseSelectionProvider.notifier)
+        .updateHandleDrag(hit.$1, hit.$2, isStartHandle: isStart);
+    _startHandleOverlay?.markNeedsBuild();
+    _endHandleOverlay?.markNeedsBuild();
+  }
+
+  Future<void> _onHandleDragEnd() async {
+    final s = ref.read(verseSelectionProvider);
+    final note = s.activeHighlight;
+    if (note == null) return;
+
+    final newStartVerse = s.liveStartVerse ?? note.verseNumber;
+    final newEndVerse = s.liveEndVerse ?? note.endVerseNumber ?? note.verseNumber;
+    final updated = note.copyWith(
+      verseNumber: newStartVerse,
+      startWordIndex: s.liveStartWord,
+      endWordIndex: s.liveEndWord,
+      endVerseNumber: newStartVerse == newEndVerse ? null : newEndVerse,
+    );
+
+    await ref.read(noteRepositoryProvider).update(updated);
+    ref.invalidate(chapterNotesProvider);
+    ref.read(verseSelectionProvider.notifier).endHandleDrag();
+    ref.read(verseSelectionProvider.notifier).setActiveHighlight(updated);
+    _updateHandleOverlays(updated);
+  }
+
+  // ── Note-only popup ──────────────────────────────────────────────────────
+
+  void _showNotePopup(StudyNote note, Offset anchorGlobal) {
+    _removeNotePopup();
+    _notePopupOverlay = OverlayEntry(
+      builder: (ctx) => _NoteEditPopup(
+        note: note,
+        anchorGlobal: anchorGlobal,
+        onSave: (text) async {
+          final updated = note.copyWith(content: text.isEmpty ? null : text);
+          await ref.read(noteRepositoryProvider).update(updated);
+          ref.invalidate(chapterNotesProvider);
+          _removeNotePopup();
+        },
+        onDismiss: _removeNotePopup,
+      ),
+    );
+    Overlay.of(context).insert(_notePopupOverlay!);
+  }
+
+  void _removeNotePopup() {
+    _notePopupOverlay?.remove();
+    _notePopupOverlay = null;
+  }
+
   // ── Gesture handlers ─────────────────────────────────────────────────────
 
   void _onPointerDown(PointerDownEvent event) {
+    // Dismiss note popup on any tap outside it.
+    if (_notePopupOverlay != null) {
+      _removeNotePopup();
+      return;
+    }
+
+    // Tap-away: clear active highlight + handles if tap is outside the span.
+    final active = ref.read(verseSelectionProvider).activeHighlight;
+    if (active != null) {
+      final hit = _hitTest(event.position);
+      if (hit == null || !_isWordInNote(hit, active)) {
+        ref.read(verseSelectionProvider.notifier).clearActiveHighlight();
+        _removeHandleOverlays();
+      }
+    }
+
     _pointerDownPos = event.position;
     _longPressRecognized = false;
     _isDragSelecting = false;
-    _showLoadingCircle(event.position);
+
+    if (event.kind == PointerDeviceKind.mouse) {
+      _isMouseDown = true;
+      // No loading circle for mouse.
+    } else {
+      _showLoadingCircle(event.position);
+    }
   }
 
   void _onPointerMove(PointerMoveEvent event) {
+    if (event.kind == PointerDeviceKind.mouse && _isMouseDown) {
+      _handleMouseDragMove(event.position);
+      return;
+    }
     if (_longPressRecognized) return; // let GestureDetector handle it
     final pos = _pointerDownPos;
     if (pos == null) return;
@@ -301,9 +491,40 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     }
   }
 
+  void _handleMouseDragMove(Offset pos) {
+    final down = _pointerDownPos;
+    if (down == null) return;
+    if (!_isDragSelecting && (pos - down).distance > 4) {
+      _isDragSelecting = true;
+      final anchor = _hitTest(down);
+      if (anchor != null) {
+        ref
+            .read(verseSelectionProvider.notifier)
+            .startSelection(anchor.$1, anchor.$2);
+      }
+      setState(() {}); // switches to NeverScrollableScrollPhysics
+    }
+    if (_isDragSelecting) {
+      final hit = _hitTest(pos);
+      if (hit != null) {
+        ref.read(verseSelectionProvider.notifier).updateFocus(hit.$1, hit.$2);
+      }
+    }
+  }
+
   void _onPointerUp(PointerUpEvent event) {
-    // Quick tap (no long-press recognized): tear down the circle so it
-    // doesn't linger on screen waiting for an animation to finish.
+    if (event.kind == PointerDeviceKind.mouse) {
+      _isMouseDown = false;
+      if (_isDragSelecting) {
+        final selection = ref.read(verseSelectionProvider);
+        if (selection.isSelecting) _showHighlightColorPicker(selection);
+        _isDragSelecting = false;
+        if (mounted) setState(() {});
+      }
+      _pointerDownPos = null;
+      return;
+    }
+    // Quick tap (no long-press recognized): tear down the circle.
     if (!_longPressRecognized) {
       _removeLoadingCircle();
       _pointerDownPos = null;
@@ -318,16 +539,23 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   void _onLongPressStart(LongPressStartDetails details) {
+    if (_isDragSelecting) return; // mouse drag already started
     _longPressRecognized = true;
-    // Schedule the action sheet for the next frame. If a drag update arrives
+    // Schedule the action for the next frame. If a drag update arrives
     // on the same frame, _isDragSelecting will be true and we bail out.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _isDragSelecting) return;
       _removeLoadingCircle();
       final hit = _hitTest(details.globalPosition);
       if (hit != null) {
-        final verse = _versesByNumber[hit.$1];
-        if (verse != null) _showVerseActions(context, verse);
+        final highlightNote = _highlightNoteForWord(hit.$1, hit.$2);
+        if (highlightNote != null) {
+          // Long-press on an existing highlight → note-only popup.
+          _showNotePopup(highlightNote, details.globalPosition);
+        } else {
+          final verse = _versesByNumber[hit.$1];
+          if (verse != null) _showVerseActions(context, verse);
+        }
       }
       _longPressRecognized = false;
     });
@@ -379,6 +607,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   // ── Action sheet & color picker ──────────────────────────────────────────
+
+  void _onTapHighlight(BuildContext context, ScriptureVerse verse, StudyNote note) {
+    ref.read(verseSelectionProvider.notifier).setActiveHighlight(note);
+    // Show handles after a frame so word keys are rendered at correct positions.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _updateHandleOverlays(note);
+    });
+    _showVerseActions(context, verse);
+  }
 
   void _showVerseActions(BuildContext context, ScriptureVerse verse) {
     showModalBottomSheet(
@@ -490,11 +727,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           final notes = notesAsync.valueOrNull ?? [];
 
           // Expand multi-verse span notes into per-verse lookup.
-          final notesByVerse = <int, List<StudyNote>>{};
+          _notesByVerse = <int, List<StudyNote>>{};
           for (final note in notes) {
             final end = note.endVerseNumber ?? note.verseNumber;
             for (var v = note.verseNumber; v <= end; v++) {
-              notesByVerse.putIfAbsent(v, () => []).add(note);
+              _notesByVerse.putIfAbsent(v, () => []).add(note);
             }
           }
 
@@ -514,62 +751,65 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                   onLongPressMoveUpdate: _onLongPressMoveUpdate,
                   onLongPressEnd: _onLongPressEnd,
                   onLongPressCancel: _onLongPressCancel,
-                  child: Listener(
-                    onPointerDown: _onPointerDown,
-                    onPointerMove: _onPointerMove,
-                    onPointerUp: _onPointerUp,
-                    onPointerCancel: _onPointerCancel,
-                    child: ListView.builder(
-                      key: _listKey,
-                      controller: _scrollController,
-                      // Disable scroll during drag selection so the list
-                      // doesn't fight the word-selection gesture.
-                      physics: _isDragSelecting
-                          ? const NeverScrollableScrollPhysics()
-                          : null,
-                      padding:
-                          const EdgeInsets.fromLTRB(24, 16, 24, 100),
-                      itemCount: chapter.verses.length +
-                          (chapter.summary != null ? 1 : 0),
-                      itemBuilder: (context, index) {
-                        if (chapter.summary != null && index == 0) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 24),
-                            child: Text(
-                              chapter.summary!,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontStyle: FontStyle.italic,
-                                fontSize: 14 * textScale,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.text,
+                    child: Listener(
+                      onPointerDown: _onPointerDown,
+                      onPointerMove: _onPointerMove,
+                      onPointerUp: _onPointerUp,
+                      onPointerCancel: _onPointerCancel,
+                      child: ListView.builder(
+                        key: _listKey,
+                        controller: _scrollController,
+                        // Disable scroll during drag selection so the list
+                        // doesn't fight the word-selection gesture.
+                        physics: _isDragSelecting
+                            ? const NeverScrollableScrollPhysics()
+                            : null,
+                        padding:
+                            const EdgeInsets.fromLTRB(24, 16, 24, 100),
+                        itemCount: chapter.verses.length +
+                            (chapter.summary != null ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (chapter.summary != null && index == 0) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 24),
+                              child: Text(
+                                chapter.summary!,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontStyle: FontStyle.italic,
+                                  fontSize: 14 * textScale,
+                                ),
                               ),
+                            );
+                          }
+
+                          final verseIndex =
+                              chapter.summary != null ? index - 1 : index;
+                          final verse = chapter.verses[verseIndex];
+                          final verseNotes =
+                              _notesByVerse[verse.number] ?? [];
+                          final words = VerseWidget.tokenize(verse.text);
+                          final wordKeys =
+                              _getWordKeys(verse.number, words.length);
+                          final key = _verseKeys.putIfAbsent(
+                            verse.number,
+                            () => GlobalKey(),
+                          );
+
+                          return KeyedSubtree(
+                            key: key,
+                            child: VerseWidget(
+                              verse: verse,
+                              notes: verseNotes,
+                              textScale: textScale,
+                              wordKeys: wordKeys,
+                              onTapHighlight: (note) =>
+                                  _onTapHighlight(context, verse, note),
                             ),
                           );
-                        }
-
-                        final verseIndex =
-                            chapter.summary != null ? index - 1 : index;
-                        final verse = chapter.verses[verseIndex];
-                        final verseNotes =
-                            notesByVerse[verse.number] ?? [];
-                        final words = VerseWidget.tokenize(verse.text);
-                        final wordKeys =
-                            _getWordKeys(verse.number, words.length);
-                        final key = _verseKeys.putIfAbsent(
-                          verse.number,
-                          () => GlobalKey(),
-                        );
-
-                        return KeyedSubtree(
-                          key: key,
-                          child: VerseWidget(
-                            verse: verse,
-                            notes: verseNotes,
-                            textScale: textScale,
-                            wordKeys: wordKeys,
-                            onTapHighlight: () =>
-                                _showVerseActions(context, verse),
-                          ),
-                        );
-                      },
+                        },
+                      ),
                     ),
                   ),
                 ),
@@ -643,6 +883,226 @@ class _LongPressCircleState extends State<_LongPressCircle>
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── Highlight resize handle ───────────────────────────────────────────────
+
+class _HighlightHandle extends StatefulWidget {
+  final GlobalKey wordKey;
+  final bool isStart;
+  final VoidCallback onDragStart;
+  final ValueChanged<Offset> onDragUpdate;
+  final VoidCallback onDragEnd;
+
+  const _HighlightHandle({
+    required this.wordKey,
+    required this.isStart,
+    required this.onDragStart,
+    required this.onDragUpdate,
+    required this.onDragEnd,
+  });
+
+  @override
+  State<_HighlightHandle> createState() => _HighlightHandleState();
+}
+
+class _HighlightHandleState extends State<_HighlightHandle> {
+  Offset _position = Offset.zero;
+  bool _positioned = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _recalcPosition();
+  }
+
+  void _recalcPosition() {
+    final ctx = widget.wordKey.currentContext;
+    if (ctx == null) return;
+    final box = ctx.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached) return;
+    final global = box.localToGlobal(Offset.zero);
+    // Start handle anchors to bottom-left of first word.
+    // End handle anchors to bottom-right of last word.
+    final newPos = widget.isStart
+        ? Offset(global.dx - 6, global.dy + box.size.height - 6)
+        : Offset(global.dx + box.size.width - 6, global.dy + box.size.height - 6);
+    if (mounted) {
+      setState(() {
+        _position = newPos;
+        _positioned = true;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_positioned) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _recalcPosition();
+      });
+      return const SizedBox.shrink();
+    }
+    return Positioned(
+      left: _position.dx,
+      top: _position.dy,
+      child: Listener(
+        onPointerDown: (_) => widget.onDragStart(),
+        onPointerMove: (e) => widget.onDragUpdate(e.position),
+        onPointerUp: (_) => widget.onDragEnd(),
+        onPointerCancel: (_) => widget.onDragEnd(),
+        child: Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primary,
+            shape: BoxShape.circle,
+            boxShadow: const [
+              BoxShadow(blurRadius: 2, color: Colors.black26),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Note-only edit popup ──────────────────────────────────────────────────
+
+class _NoteEditPopup extends StatefulWidget {
+  final StudyNote note;
+  final Offset anchorGlobal;
+  final Future<void> Function(String text) onSave;
+  final VoidCallback onDismiss;
+
+  const _NoteEditPopup({
+    required this.note,
+    required this.anchorGlobal,
+    required this.onSave,
+    required this.onDismiss,
+  });
+
+  @override
+  State<_NoteEditPopup> createState() => _NoteEditPopupState();
+}
+
+class _NoteEditPopupState extends State<_NoteEditPopup> {
+  late final TextEditingController _textCtrl;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _textCtrl = TextEditingController(text: widget.note.content ?? '');
+  }
+
+  @override
+  void dispose() {
+    _textCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    await widget.onSave(_textCtrl.text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    final screenSize = mq.size;
+    final keyboardBottom = mq.viewInsets.bottom;
+
+    const cardWidth = 280.0;
+    const cardHeight = 200.0; // approximate
+    const margin = 16.0;
+
+    // Position card above the anchor; flip below if too close to top.
+    double top = widget.anchorGlobal.dy - cardHeight - 12;
+    if (top < margin) top = widget.anchorGlobal.dy + 24;
+    // Clamp vertically above keyboard.
+    final maxTop = screenSize.height - keyboardBottom - cardHeight - margin;
+    top = top.clamp(margin, math.max(margin, maxTop));
+
+    // Center horizontally on anchor, clamped to screen edges.
+    double left = widget.anchorGlobal.dx - cardWidth / 2;
+    left = left.clamp(margin, screenSize.width - cardWidth - margin);
+
+    return Stack(
+      children: [
+        // Full-screen dismiss layer.
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: widget.onDismiss,
+            behavior: HitTestBehavior.opaque,
+            child: const ColoredBox(color: Colors.transparent),
+          ),
+        ),
+        // Floating card.
+        Positioned(
+          left: left,
+          top: top,
+          width: cardWidth,
+          child: GestureDetector(
+            onTap: () {}, // absorb taps so they don't reach the dismiss layer
+            child: Material(
+              elevation: 6,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Text('Note',
+                            style: Theme.of(context).textTheme.labelLarge),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: widget.onDismiss,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _textCtrl,
+                      maxLines: 4,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        hintText: 'Add a note…',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _saving ? null : _save,
+                        child: _saving
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Text('Save'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
