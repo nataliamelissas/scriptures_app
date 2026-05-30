@@ -73,6 +73,9 @@ class NoteRepositoryImpl implements NoteRepository {
       NotesCompanion(
         content: Value(note.content),
         highlightColor: Value(note.highlightColorValue),
+        startWordIndex: Value(note.startWordIndex),
+        endWordIndex: Value(note.endWordIndex),
+        endVerseNumber: Value(note.endVerseNumber),
       ),
     );
   }
