@@ -1003,6 +1003,39 @@ class $NotesTable extends Notes with TableInfo<$NotesTable, Note> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _endVerseNumberMeta = const VerificationMeta(
+    'endVerseNumber',
+  );
+  @override
+  late final GeneratedColumn<int> endVerseNumber = GeneratedColumn<int>(
+    'end_verse_number',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _startWordIndexMeta = const VerificationMeta(
+    'startWordIndex',
+  );
+  @override
+  late final GeneratedColumn<int> startWordIndex = GeneratedColumn<int>(
+    'start_word_index',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _endWordIndexMeta = const VerificationMeta(
+    'endWordIndex',
+  );
+  @override
+  late final GeneratedColumn<int> endWordIndex = GeneratedColumn<int>(
+    'end_word_index',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -1025,6 +1058,9 @@ class $NotesTable extends Notes with TableInfo<$NotesTable, Note> {
     type,
     content,
     highlightColor,
+    endVerseNumber,
+    startWordIndex,
+    endWordIndex,
     createdAt,
   ];
   @override
@@ -1110,6 +1146,33 @@ class $NotesTable extends Notes with TableInfo<$NotesTable, Note> {
         ),
       );
     }
+    if (data.containsKey('end_verse_number')) {
+      context.handle(
+        _endVerseNumberMeta,
+        endVerseNumber.isAcceptableOrUnknown(
+          data['end_verse_number']!,
+          _endVerseNumberMeta,
+        ),
+      );
+    }
+    if (data.containsKey('start_word_index')) {
+      context.handle(
+        _startWordIndexMeta,
+        startWordIndex.isAcceptableOrUnknown(
+          data['start_word_index']!,
+          _startWordIndexMeta,
+        ),
+      );
+    }
+    if (data.containsKey('end_word_index')) {
+      context.handle(
+        _endWordIndexMeta,
+        endWordIndex.isAcceptableOrUnknown(
+          data['end_word_index']!,
+          _endWordIndexMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -1163,6 +1226,18 @@ class $NotesTable extends Notes with TableInfo<$NotesTable, Note> {
         DriftSqlType.int,
         data['${effectivePrefix}highlight_color'],
       ),
+      endVerseNumber: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}end_verse_number'],
+      ),
+      startWordIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}start_word_index'],
+      ),
+      endWordIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}end_word_index'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -1186,6 +1261,9 @@ class Note extends DataClass implements Insertable<Note> {
   final String type;
   final String? content;
   final int? highlightColor;
+  final int? endVerseNumber;
+  final int? startWordIndex;
+  final int? endWordIndex;
   final DateTime createdAt;
   const Note({
     required this.id,
@@ -1197,6 +1275,9 @@ class Note extends DataClass implements Insertable<Note> {
     required this.type,
     this.content,
     this.highlightColor,
+    this.endVerseNumber,
+    this.startWordIndex,
+    this.endWordIndex,
     required this.createdAt,
   });
   @override
@@ -1214,6 +1295,15 @@ class Note extends DataClass implements Insertable<Note> {
     }
     if (!nullToAbsent || highlightColor != null) {
       map['highlight_color'] = Variable<int>(highlightColor);
+    }
+    if (!nullToAbsent || endVerseNumber != null) {
+      map['end_verse_number'] = Variable<int>(endVerseNumber);
+    }
+    if (!nullToAbsent || startWordIndex != null) {
+      map['start_word_index'] = Variable<int>(startWordIndex);
+    }
+    if (!nullToAbsent || endWordIndex != null) {
+      map['end_word_index'] = Variable<int>(endWordIndex);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
@@ -1234,6 +1324,15 @@ class Note extends DataClass implements Insertable<Note> {
       highlightColor: highlightColor == null && nullToAbsent
           ? const Value.absent()
           : Value(highlightColor),
+      endVerseNumber: endVerseNumber == null && nullToAbsent
+          ? const Value.absent()
+          : Value(endVerseNumber),
+      startWordIndex: startWordIndex == null && nullToAbsent
+          ? const Value.absent()
+          : Value(startWordIndex),
+      endWordIndex: endWordIndex == null && nullToAbsent
+          ? const Value.absent()
+          : Value(endWordIndex),
       createdAt: Value(createdAt),
     );
   }
@@ -1253,6 +1352,9 @@ class Note extends DataClass implements Insertable<Note> {
       type: serializer.fromJson<String>(json['type']),
       content: serializer.fromJson<String?>(json['content']),
       highlightColor: serializer.fromJson<int?>(json['highlightColor']),
+      endVerseNumber: serializer.fromJson<int?>(json['endVerseNumber']),
+      startWordIndex: serializer.fromJson<int?>(json['startWordIndex']),
+      endWordIndex: serializer.fromJson<int?>(json['endWordIndex']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -1269,6 +1371,9 @@ class Note extends DataClass implements Insertable<Note> {
       'type': serializer.toJson<String>(type),
       'content': serializer.toJson<String?>(content),
       'highlightColor': serializer.toJson<int?>(highlightColor),
+      'endVerseNumber': serializer.toJson<int?>(endVerseNumber),
+      'startWordIndex': serializer.toJson<int?>(startWordIndex),
+      'endWordIndex': serializer.toJson<int?>(endWordIndex),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -1283,6 +1388,9 @@ class Note extends DataClass implements Insertable<Note> {
     String? type,
     Value<String?> content = const Value.absent(),
     Value<int?> highlightColor = const Value.absent(),
+    Value<int?> endVerseNumber = const Value.absent(),
+    Value<int?> startWordIndex = const Value.absent(),
+    Value<int?> endWordIndex = const Value.absent(),
     DateTime? createdAt,
   }) => Note(
     id: id ?? this.id,
@@ -1296,6 +1404,13 @@ class Note extends DataClass implements Insertable<Note> {
     highlightColor: highlightColor.present
         ? highlightColor.value
         : this.highlightColor,
+    endVerseNumber: endVerseNumber.present
+        ? endVerseNumber.value
+        : this.endVerseNumber,
+    startWordIndex: startWordIndex.present
+        ? startWordIndex.value
+        : this.startWordIndex,
+    endWordIndex: endWordIndex.present ? endWordIndex.value : this.endWordIndex,
     createdAt: createdAt ?? this.createdAt,
   );
   Note copyWithCompanion(NotesCompanion data) {
@@ -1313,6 +1428,15 @@ class Note extends DataClass implements Insertable<Note> {
       highlightColor: data.highlightColor.present
           ? data.highlightColor.value
           : this.highlightColor,
+      endVerseNumber: data.endVerseNumber.present
+          ? data.endVerseNumber.value
+          : this.endVerseNumber,
+      startWordIndex: data.startWordIndex.present
+          ? data.startWordIndex.value
+          : this.startWordIndex,
+      endWordIndex: data.endWordIndex.present
+          ? data.endWordIndex.value
+          : this.endWordIndex,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -1329,6 +1453,9 @@ class Note extends DataClass implements Insertable<Note> {
           ..write('type: $type, ')
           ..write('content: $content, ')
           ..write('highlightColor: $highlightColor, ')
+          ..write('endVerseNumber: $endVerseNumber, ')
+          ..write('startWordIndex: $startWordIndex, ')
+          ..write('endWordIndex: $endWordIndex, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -1345,6 +1472,9 @@ class Note extends DataClass implements Insertable<Note> {
     type,
     content,
     highlightColor,
+    endVerseNumber,
+    startWordIndex,
+    endWordIndex,
     createdAt,
   );
   @override
@@ -1360,6 +1490,9 @@ class Note extends DataClass implements Insertable<Note> {
           other.type == this.type &&
           other.content == this.content &&
           other.highlightColor == this.highlightColor &&
+          other.endVerseNumber == this.endVerseNumber &&
+          other.startWordIndex == this.startWordIndex &&
+          other.endWordIndex == this.endWordIndex &&
           other.createdAt == this.createdAt);
 }
 
@@ -1373,6 +1506,9 @@ class NotesCompanion extends UpdateCompanion<Note> {
   final Value<String> type;
   final Value<String?> content;
   final Value<int?> highlightColor;
+  final Value<int?> endVerseNumber;
+  final Value<int?> startWordIndex;
+  final Value<int?> endWordIndex;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
   const NotesCompanion({
@@ -1385,6 +1521,9 @@ class NotesCompanion extends UpdateCompanion<Note> {
     this.type = const Value.absent(),
     this.content = const Value.absent(),
     this.highlightColor = const Value.absent(),
+    this.endVerseNumber = const Value.absent(),
+    this.startWordIndex = const Value.absent(),
+    this.endWordIndex = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -1398,6 +1537,9 @@ class NotesCompanion extends UpdateCompanion<Note> {
     required String type,
     this.content = const Value.absent(),
     this.highlightColor = const Value.absent(),
+    this.endVerseNumber = const Value.absent(),
+    this.startWordIndex = const Value.absent(),
+    this.endWordIndex = const Value.absent(),
     required DateTime createdAt,
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -1418,6 +1560,9 @@ class NotesCompanion extends UpdateCompanion<Note> {
     Expression<String>? type,
     Expression<String>? content,
     Expression<int>? highlightColor,
+    Expression<int>? endVerseNumber,
+    Expression<int>? startWordIndex,
+    Expression<int>? endWordIndex,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
   }) {
@@ -1431,6 +1576,9 @@ class NotesCompanion extends UpdateCompanion<Note> {
       if (type != null) 'type': type,
       if (content != null) 'content': content,
       if (highlightColor != null) 'highlight_color': highlightColor,
+      if (endVerseNumber != null) 'end_verse_number': endVerseNumber,
+      if (startWordIndex != null) 'start_word_index': startWordIndex,
+      if (endWordIndex != null) 'end_word_index': endWordIndex,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -1446,6 +1594,9 @@ class NotesCompanion extends UpdateCompanion<Note> {
     Value<String>? type,
     Value<String?>? content,
     Value<int?>? highlightColor,
+    Value<int?>? endVerseNumber,
+    Value<int?>? startWordIndex,
+    Value<int?>? endWordIndex,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
   }) {
@@ -1459,6 +1610,9 @@ class NotesCompanion extends UpdateCompanion<Note> {
       type: type ?? this.type,
       content: content ?? this.content,
       highlightColor: highlightColor ?? this.highlightColor,
+      endVerseNumber: endVerseNumber ?? this.endVerseNumber,
+      startWordIndex: startWordIndex ?? this.startWordIndex,
+      endWordIndex: endWordIndex ?? this.endWordIndex,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
     );
@@ -1494,6 +1648,15 @@ class NotesCompanion extends UpdateCompanion<Note> {
     if (highlightColor.present) {
       map['highlight_color'] = Variable<int>(highlightColor.value);
     }
+    if (endVerseNumber.present) {
+      map['end_verse_number'] = Variable<int>(endVerseNumber.value);
+    }
+    if (startWordIndex.present) {
+      map['start_word_index'] = Variable<int>(startWordIndex.value);
+    }
+    if (endWordIndex.present) {
+      map['end_word_index'] = Variable<int>(endWordIndex.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1515,6 +1678,9 @@ class NotesCompanion extends UpdateCompanion<Note> {
           ..write('type: $type, ')
           ..write('content: $content, ')
           ..write('highlightColor: $highlightColor, ')
+          ..write('endVerseNumber: $endVerseNumber, ')
+          ..write('startWordIndex: $startWordIndex, ')
+          ..write('endWordIndex: $endWordIndex, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -2968,6 +3134,9 @@ typedef $$NotesTableCreateCompanionBuilder =
       required String type,
       Value<String?> content,
       Value<int?> highlightColor,
+      Value<int?> endVerseNumber,
+      Value<int?> startWordIndex,
+      Value<int?> endWordIndex,
       required DateTime createdAt,
       Value<int> rowid,
     });
@@ -2982,6 +3151,9 @@ typedef $$NotesTableUpdateCompanionBuilder =
       Value<String> type,
       Value<String?> content,
       Value<int?> highlightColor,
+      Value<int?> endVerseNumber,
+      Value<int?> startWordIndex,
+      Value<int?> endWordIndex,
       Value<DateTime> createdAt,
       Value<int> rowid,
     });
@@ -3053,6 +3225,21 @@ class $$NotesTableFilterComposer extends Composer<_$AppDatabase, $NotesTable> {
 
   ColumnFilters<int> get highlightColor => $composableBuilder(
     column: $table.highlightColor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get endVerseNumber => $composableBuilder(
+    column: $table.endVerseNumber,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get startWordIndex => $composableBuilder(
+    column: $table.startWordIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get endWordIndex => $composableBuilder(
+    column: $table.endWordIndex,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3134,6 +3321,21 @@ class $$NotesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get endVerseNumber => $composableBuilder(
+    column: $table.endVerseNumber,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get startWordIndex => $composableBuilder(
+    column: $table.startWordIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get endWordIndex => $composableBuilder(
+    column: $table.endWordIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -3197,6 +3399,21 @@ class $$NotesTableAnnotationComposer
 
   GeneratedColumn<int> get highlightColor => $composableBuilder(
     column: $table.highlightColor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get endVerseNumber => $composableBuilder(
+    column: $table.endVerseNumber,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get startWordIndex => $composableBuilder(
+    column: $table.startWordIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get endWordIndex => $composableBuilder(
+    column: $table.endWordIndex,
     builder: (column) => column,
   );
 
@@ -3264,6 +3481,9 @@ class $$NotesTableTableManager
                 Value<String> type = const Value.absent(),
                 Value<String?> content = const Value.absent(),
                 Value<int?> highlightColor = const Value.absent(),
+                Value<int?> endVerseNumber = const Value.absent(),
+                Value<int?> startWordIndex = const Value.absent(),
+                Value<int?> endWordIndex = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => NotesCompanion(
@@ -3276,6 +3496,9 @@ class $$NotesTableTableManager
                 type: type,
                 content: content,
                 highlightColor: highlightColor,
+                endVerseNumber: endVerseNumber,
+                startWordIndex: startWordIndex,
+                endWordIndex: endWordIndex,
                 createdAt: createdAt,
                 rowid: rowid,
               ),
@@ -3290,6 +3513,9 @@ class $$NotesTableTableManager
                 required String type,
                 Value<String?> content = const Value.absent(),
                 Value<int?> highlightColor = const Value.absent(),
+                Value<int?> endVerseNumber = const Value.absent(),
+                Value<int?> startWordIndex = const Value.absent(),
+                Value<int?> endWordIndex = const Value.absent(),
                 required DateTime createdAt,
                 Value<int> rowid = const Value.absent(),
               }) => NotesCompanion.insert(
@@ -3302,6 +3528,9 @@ class $$NotesTableTableManager
                 type: type,
                 content: content,
                 highlightColor: highlightColor,
+                endVerseNumber: endVerseNumber,
+                startWordIndex: startWordIndex,
+                endWordIndex: endWordIndex,
                 createdAt: createdAt,
                 rowid: rowid,
               ),

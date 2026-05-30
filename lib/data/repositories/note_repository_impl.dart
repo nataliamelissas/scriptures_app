@@ -44,6 +44,9 @@ class NoteRepositoryImpl implements NoteRepository {
           type: note.type.name,
           content: Value(note.content),
           highlightColor: Value(note.highlightColorValue),
+          endVerseNumber: Value(note.endVerseNumber),
+          startWordIndex: Value(note.startWordIndex),
+          endWordIndex: Value(note.endWordIndex),
           createdAt: note.createdAt,
         ));
 
@@ -57,6 +60,9 @@ class NoteRepositoryImpl implements NoteRepository {
       type: note.type,
       content: note.content,
       highlightColorValue: note.highlightColorValue,
+      endVerseNumber: note.endVerseNumber,
+      startWordIndex: note.startWordIndex,
+      endWordIndex: note.endWordIndex,
       createdAt: note.createdAt,
     );
   }
@@ -88,6 +94,9 @@ class NoteRepositoryImpl implements NoteRepository {
         type: NoteType.values.byName(row.type),
         content: row.content,
         highlightColorValue: row.highlightColor,
+        endVerseNumber: row.endVerseNumber,
+        startWordIndex: row.startWordIndex,
+        endWordIndex: row.endWordIndex,
         createdAt: row.createdAt,
       );
 

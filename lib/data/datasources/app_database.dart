@@ -50,6 +50,15 @@ class Notes extends Table {
   TextColumn get type => text()(); // NoteType.name: 'highlight', 'note', 'bookmark'
   TextColumn get content => text().nullable()();
   IntColumn get highlightColor => integer().nullable()();
+
+  // ── v4 ──
+  // Multi-verse highlight span: null = single-verse note.
+  IntColumn get endVerseNumber => integer().nullable()();
+  // Word indices (0-based, split on whitespace) for partial-verse highlights.
+  // Null = start/end of verse respectively.
+  IntColumn get startWordIndex => integer().nullable()();
+  IntColumn get endWordIndex => integer().nullable()();
+
   DateTimeColumn get createdAt => dateTime()();
 
   @override
@@ -88,7 +97,7 @@ class AppDatabase extends _$AppDatabase {
       : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -134,6 +143,11 @@ class AppDatabase extends _$AppDatabase {
               'UPDATE projects SET active_volume_id = '
               'COALESCE(last_volume, default_volume_id)',
             );
+          }
+          if (from < 4) {
+            await m.addColumn(notes, notes.endVerseNumber);
+            await m.addColumn(notes, notes.startWordIndex);
+            await m.addColumn(notes, notes.endWordIndex);
           }
         },
       );

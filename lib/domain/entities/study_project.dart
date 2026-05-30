@@ -106,6 +106,20 @@ class StudyNote {
   final NoteType type;
   final String? content; // text for notes, null for highlights/bookmarks
   final int? highlightColorValue; // ARGB int
+
+  /// For multi-verse highlight spans. Null means the note covers only
+  /// [verseNumber]. When set, all verses in [verseNumber]..[endVerseNumber]
+  /// are included; intermediate verses are fully highlighted.
+  final int? endVerseNumber;
+
+  /// Word index (0-based, split on whitespace) where a highlight starts
+  /// within [verseNumber]. Null means start of verse.
+  final int? startWordIndex;
+
+  /// Word index where a highlight ends within [endVerseNumber] (or
+  /// [verseNumber] for single-verse notes). Null means end of verse.
+  final int? endWordIndex;
+
   final DateTime createdAt;
 
   const StudyNote({
@@ -118,12 +132,18 @@ class StudyNote {
     required this.type,
     this.content,
     this.highlightColorValue,
+    this.endVerseNumber,
+    this.startWordIndex,
+    this.endWordIndex,
     required this.createdAt,
   });
 
   StudyNote copyWith({
     String? content,
     int? highlightColorValue,
+    int? endVerseNumber,
+    int? startWordIndex,
+    int? endWordIndex,
   }) {
     return StudyNote(
       id: id,
@@ -135,6 +155,9 @@ class StudyNote {
       type: type,
       content: content ?? this.content,
       highlightColorValue: highlightColorValue ?? this.highlightColorValue,
+      endVerseNumber: endVerseNumber ?? this.endVerseNumber,
+      startWordIndex: startWordIndex ?? this.startWordIndex,
+      endWordIndex: endWordIndex ?? this.endWordIndex,
       createdAt: createdAt,
     );
   }
