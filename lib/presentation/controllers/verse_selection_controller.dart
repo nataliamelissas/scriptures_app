@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../domain/entities/study_project.dart';
 
 @immutable
 class VerseSelectionState {
@@ -9,12 +10,30 @@ class VerseSelectionState {
   final int? focusVerse;
   final int? focusWord;
 
+  /// The existing highlight currently "tapped" — drives border outline + handles.
+  final StudyNote? activeHighlight;
+
+  /// True while the user is dragging a resize handle on [activeHighlight].
+  final bool isDraggingHandle;
+
+  /// Live word/verse positions during a handle drag (null = use saved note values).
+  final int? liveStartVerse;
+  final int? liveStartWord;
+  final int? liveEndVerse;
+  final int? liveEndWord;
+
   const VerseSelectionState({
     this.isSelecting = false,
     this.anchorVerse,
     this.anchorWord,
     this.focusVerse,
     this.focusWord,
+    this.activeHighlight,
+    this.isDraggingHandle = false,
+    this.liveStartVerse,
+    this.liveStartWord,
+    this.liveEndVerse,
+    this.liveEndWord,
   });
 
   // Normalized so startVerse <= endVerse regardless of drag direction.
@@ -66,6 +85,36 @@ class VerseSelectionState {
       anchorWord: anchorWord ?? this.anchorWord,
       focusVerse: focusVerse ?? this.focusVerse,
       focusWord: focusWord ?? this.focusWord,
+      activeHighlight: activeHighlight,
+      isDraggingHandle: isDraggingHandle,
+      liveStartVerse: liveStartVerse,
+      liveStartWord: liveStartWord,
+      liveEndVerse: liveEndVerse,
+      liveEndWord: liveEndWord,
+    );
+  }
+
+  /// Returns a new state with updated live drag positions, clearing
+  /// [isDraggingHandle] when called with no arguments.
+  VerseSelectionState _withLive({
+    int? startVerse,
+    int? startWord,
+    int? endVerse,
+    int? endWord,
+    bool dragging = false,
+  }) {
+    return VerseSelectionState(
+      isSelecting: isSelecting,
+      anchorVerse: anchorVerse,
+      anchorWord: anchorWord,
+      focusVerse: focusVerse,
+      focusWord: focusWord,
+      activeHighlight: activeHighlight,
+      isDraggingHandle: dragging,
+      liveStartVerse: startVerse,
+      liveStartWord: startWord,
+      liveEndVerse: endVerse,
+      liveEndWord: endWord,
     );
   }
 
@@ -76,7 +125,13 @@ class VerseSelectionState {
       other.anchorVerse == anchorVerse &&
       other.anchorWord == anchorWord &&
       other.focusVerse == focusVerse &&
-      other.focusWord == focusWord;
+      other.focusWord == focusWord &&
+      other.activeHighlight?.id == activeHighlight?.id &&
+      other.isDraggingHandle == isDraggingHandle &&
+      other.liveStartVerse == liveStartVerse &&
+      other.liveStartWord == liveStartWord &&
+      other.liveEndVerse == liveEndVerse &&
+      other.liveEndWord == liveEndWord;
 
   @override
   int get hashCode => Object.hash(
@@ -85,6 +140,12 @@ class VerseSelectionState {
         anchorWord,
         focusVerse,
         focusWord,
+        activeHighlight?.id,
+        isDraggingHandle,
+        liveStartVerse,
+        liveStartWord,
+        liveEndVerse,
+        liveEndWord,
       );
 }
 
@@ -109,6 +170,55 @@ class VerseSelectionController extends Notifier<VerseSelectionState> {
 
   void clearSelection() {
     state = const VerseSelectionState();
+  }
+
+  /// Sets [note] as the tapped/active highlight (shows border + handles).
+  void setActiveHighlight(StudyNote note) {
+    state = VerseSelectionState(activeHighlight: note);
+  }
+
+  /// Clears the active highlight, border, and any handle drag state.
+  void clearActiveHighlight() {
+    state = const VerseSelectionState();
+  }
+
+  /// Begins a handle drag on [note], seeding live positions from saved values.
+  void beginHandleDrag(StudyNote note) {
+    final endVerse = note.endVerseNumber ?? note.verseNumber;
+    state = VerseSelectionState(
+      activeHighlight: note,
+      isDraggingHandle: true,
+      liveStartVerse: note.verseNumber,
+      liveStartWord: note.startWordIndex ?? 0,
+      liveEndVerse: endVerse,
+      liveEndWord: note.endWordIndex,
+    );
+  }
+
+  /// Updates the live start or end position during a handle drag.
+  void updateHandleDrag(int verse, int word, {required bool isStartHandle}) {
+    if (isStartHandle) {
+      state = state._withLive(
+        startVerse: verse,
+        startWord: word,
+        endVerse: state.liveEndVerse,
+        endWord: state.liveEndWord,
+        dragging: true,
+      );
+    } else {
+      state = state._withLive(
+        startVerse: state.liveStartVerse,
+        startWord: state.liveStartWord,
+        endVerse: verse,
+        endWord: word,
+        dragging: true,
+      );
+    }
+  }
+
+  /// Ends the handle drag, keeping [activeHighlight] but clearing live positions.
+  void endHandleDrag() {
+    state = state._withLive();
   }
 }
 

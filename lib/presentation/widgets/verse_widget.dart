@@ -16,7 +16,8 @@ class VerseWidget extends ConsumerWidget {
   final double textScale;
 
   /// Called when the user taps a word that already carries a highlight.
-  final VoidCallback onTapHighlight;
+  /// The matching [StudyNote] is passed so callers can route to the right action.
+  final void Function(StudyNote note) onTapHighlight;
 
   /// One [GlobalKey] per word token (split on whitespace). Created and owned
   /// by [ReaderScreen] so it can hit-test words during drag.
@@ -36,15 +37,51 @@ class VerseWidget extends ConsumerWidget {
     final theme = Theme.of(context);
     final words = _tokenize(verse.text);
 
-    // Only rebuild this widget when the selection range for THIS verse changes.
-    final selRange = ref.watch(
-      verseSelectionProvider
-          .select((s) => s.rangeForVerse(verse.number, words.length)),
+    // Only rebuild this widget when the selection/active-highlight state
+    // relevant to THIS verse changes.
+    final (selRange, activeId, isDragging, liveStartV, liveStartW, liveEndV, liveEndW) =
+        ref.watch(
+      verseSelectionProvider.select((s) => (
+        s.rangeForVerse(verse.number, words.length),
+        s.activeHighlight?.id,
+        s.isDraggingHandle,
+        s.liveStartVerse,
+        s.liveStartWord,
+        s.liveEndVerse,
+        s.liveEndWord,
+      )),
     );
 
     final hasNote = notes.any((n) => n.type == NoteType.note);
     final hasBookmark = notes.any((n) => n.type == NoteType.bookmark);
     final highlights = notes.where((n) => n.type == NoteType.highlight).toList();
+
+    // Determine the active highlight note for this verse (if any).
+    final activeNote = activeId != null
+        ? highlights.where((n) => n.id == activeId).firstOrNull
+        : null;
+
+    // Compute the border span for the active note (accounting for live drag).
+    (int, int)? activeBorderRange;
+    if (activeNote != null) {
+      if (isDragging &&
+          liveStartV != null &&
+          liveEndV != null) {
+        activeBorderRange = _liveRangeForNote(
+          activeNote,
+          verse.number,
+          words.length,
+          liveStartV,
+          liveStartW,
+          liveEndV,
+          liveEndW,
+        );
+      } else {
+        activeBorderRange = wordRangeForNote(activeNote, verse.number, words.length);
+      }
+    }
+
+    final borderColor = theme.colorScheme.primary.withAlpha(180);
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 2),
@@ -76,7 +113,7 @@ class VerseWidget extends ConsumerWidget {
                     // Compute stored highlight once; selection overlay wins
                     // for chip color but tap-to-edit still keys off having
                     // an underlying stored highlight.
-                    final storedHighlight = _highlightColorForWord(
+                    final (storedHighlight, matchedNote) = _highlightColorForWord(
                         i, words.length, highlights, verse.number);
                     final isInSelection = selRange != null &&
                         i >= selRange.$1 &&
@@ -84,6 +121,28 @@ class VerseWidget extends ConsumerWidget {
                     final Color? chipColor = isInSelection
                         ? theme.colorScheme.primary.withAlpha(80)
                         : storedHighlight;
+
+                    // Compute border decoration for active highlight.
+                    BoxDecoration? borderDecoration;
+                    if (activeBorderRange != null) {
+                      final (bs, be) = activeBorderRange;
+                      if (i >= bs && i <= be) {
+                        final isFirst = i == bs;
+                        final isLast2 = i == be;
+                        borderDecoration = BoxDecoration(
+                          border: Border(
+                            top: BorderSide(color: borderColor, width: 1.5),
+                            bottom: BorderSide(color: borderColor, width: 1.5),
+                            left: isFirst
+                                ? BorderSide(color: borderColor, width: 1.5)
+                                : BorderSide.none,
+                            right: isLast2
+                                ? BorderSide(color: borderColor, width: 1.5)
+                                : BorderSide.none,
+                          ),
+                        );
+                      }
+                    }
 
                     Widget chip = Container(
                       key: wordKeys[i],
@@ -96,11 +155,18 @@ class VerseWidget extends ConsumerWidget {
                       ),
                     );
 
-                    // Existing highlighted words open the action sheet on tap
-                    // (no long-press required — tapping is enough).
-                    if (storedHighlight != null) {
+                    if (borderDecoration != null) {
+                      chip = DecoratedBox(
+                        decoration: borderDecoration,
+                        child: chip,
+                      );
+                    }
+
+                    // Existing highlighted words open the action sheet on tap.
+                    if (storedHighlight != null && matchedNote != null) {
+                      final note = matchedNote;
                       chip = GestureDetector(
-                        onTap: onTapHighlight,
+                        onTap: () => onTapHighlight(note),
                         behavior: HitTestBehavior.opaque,
                         child: chip,
                       );
@@ -159,28 +225,32 @@ class VerseWidget extends ConsumerWidget {
   static List<String> _tokenize(String text) =>
       text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
 
-  /// Returns the highlight [Color] that covers [wordIndex] in this verse,
-  /// considering multi-verse span geometry.
-  static Color? _highlightColorForWord(
+  /// Returns the highlight [Color] and matching [StudyNote] covering [wordIndex],
+  /// or `(null, null)` if no highlight covers it.
+  static (Color?, StudyNote?) _highlightColorForWord(
     int wordIndex,
     int wordCount,
     List<StudyNote> highlights,
     int verseNumber,
   ) {
     for (final note in highlights) {
-      final (start, end) = _wordRangeForNote(note, verseNumber, wordCount);
+      final (start, end) = wordRangeForNote(note, verseNumber, wordCount);
       if (wordIndex >= start && wordIndex <= end) {
-        return note.highlightColorValue != null
+        final color = note.highlightColorValue != null
             ? Color(note.highlightColorValue!)
             : HighlightColors.yellow;
+        return (color, note);
       }
     }
-    return null;
+    return (null, null);
   }
 
   /// Computes the highlighted word range `(startIdx, endIdx)` within
   /// [verseNumber] for a given [note], accounting for span position.
-  static (int, int) _wordRangeForNote(
+  ///
+  /// Exposed as a public static so [ReaderScreen] can reuse the geometry
+  /// logic without duplicating it.
+  static (int, int) wordRangeForNote(
       StudyNote note, int verseNumber, int wordCount) {
     final endVerse = note.endVerseNumber ?? note.verseNumber;
 
@@ -197,6 +267,28 @@ class VerseWidget extends ConsumerWidget {
       return (0, note.endWordIndex ?? (wordCount - 1));
     }
     // Middle verse — fully highlighted.
+    return (0, wordCount - 1);
+  }
+
+  /// Like [wordRangeForNote] but uses live drag positions from the controller.
+  static (int, int) _liveRangeForNote(
+    StudyNote note,
+    int verseNumber,
+    int wordCount,
+    int liveStartVerse,
+    int? liveStartWord,
+    int liveEndVerse,
+    int? liveEndWord,
+  ) {
+    if (liveStartVerse == liveEndVerse) {
+      if (verseNumber != liveStartVerse) return (0, -1); // not in range
+      return (liveStartWord ?? 0, liveEndWord ?? (wordCount - 1));
+    }
+    if (verseNumber < liveStartVerse || verseNumber > liveEndVerse) {
+      return (0, -1); // not in range
+    }
+    if (verseNumber == liveStartVerse) return (liveStartWord ?? 0, wordCount - 1);
+    if (verseNumber == liveEndVerse) return (0, liveEndWord ?? (wordCount - 1));
     return (0, wordCount - 1);
   }
 
