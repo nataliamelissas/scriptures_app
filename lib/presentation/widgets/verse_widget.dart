@@ -56,28 +56,31 @@ class VerseWidget extends ConsumerWidget {
     final hasBookmark = notes.any((n) => n.type == NoteType.bookmark);
     final highlights = notes.where((n) => n.type == NoteType.highlight).toList();
 
-    // Determine the active highlight note for this verse (if any).
-    final activeNote = activeId != null
-        ? highlights.where((n) => n.id == activeId).firstOrNull
-        : null;
-
-    // Compute the border span for the active note (accounting for live drag).
+    // Compute the border span for the active highlight (accounting for live drag).
     (int, int)? activeBorderRange;
-    if (activeNote != null) {
-      if (isDragging &&
-          liveStartV != null &&
-          liveEndV != null) {
-        activeBorderRange = _liveRangeForNote(
-          activeNote,
-          verse.number,
-          words.length,
-          liveStartV,
-          liveStartW,
-          liveEndV,
-          liveEndW,
-        );
-      } else {
-        activeBorderRange = wordRangeForNote(activeNote, verse.number, words.length);
+    if (isDragging && liveStartV != null && liveEndV != null) {
+      // Live handle drag: derive the border purely from the live positions.
+      // We must NOT require the note to be present in THIS verse's `notes`
+      // list — when the user drags the end handle into verses below the
+      // saved span, those verses don't yet carry the note, but the moving
+      // border still needs to render on them. `_liveRangeForNote` returns
+      // (0, -1) for verses outside the live range, which we skip.
+      final (s, e) = _liveRangeForNote(
+        verse.number,
+        words.length,
+        liveStartV,
+        liveStartW,
+        liveEndV,
+        liveEndW,
+      );
+      if (s <= e) activeBorderRange = (s, e);
+    } else if (activeId != null) {
+      // Static (not dragging): border follows the saved span. The note is
+      // present in `notes` for every verse it covers, so this lookup works.
+      final activeNote = highlights.where((n) => n.id == activeId).firstOrNull;
+      if (activeNote != null) {
+        activeBorderRange =
+            wordRangeForNote(activeNote, verse.number, words.length);
       }
     }
 
@@ -270,9 +273,12 @@ class VerseWidget extends ConsumerWidget {
     return (0, wordCount - 1);
   }
 
-  /// Like [wordRangeForNote] but uses live drag positions from the controller.
+  /// Computes the highlighted word range `(startIdx, endIdx)` for [verseNumber]
+  /// from the controller's *live* drag positions. Returns `(0, -1)` (an empty
+  /// range) when [verseNumber] falls outside the live span. Deliberately takes
+  /// no [StudyNote] — the live positions fully describe the span, so this works
+  /// even for verses that don't yet carry the note being resized.
   static (int, int) _liveRangeForNote(
-    StudyNote note,
     int verseNumber,
     int wordCount,
     int liveStartVerse,

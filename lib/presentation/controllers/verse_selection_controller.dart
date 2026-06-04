@@ -36,25 +36,39 @@ class VerseSelectionState {
     this.liveEndWord,
   });
 
-  // Normalized so startVerse <= endVerse regardless of drag direction.
+  /// True when the anchor position is at or before the focus position,
+  /// comparing by composite `(verse, word)` — verse first, then word.
+  ///
+  /// CRITICAL: the word comparison only matters when the verses are equal.
+  /// A same-verse selection (anchorVerse == focusVerse) must be ordered by
+  /// WORD, not verse — otherwise both [startWord] and [endWord] collapse to
+  /// [anchorWord] and the selection is permanently stuck at a single word.
+  bool get _anchorAtOrBeforeFocus {
+    if (anchorVerse == null || focusVerse == null) return true;
+    if (anchorVerse! != focusVerse!) return anchorVerse! < focusVerse!;
+    return (anchorWord ?? 0) <= (focusWord ?? 0);
+  }
+
+  // Normalized so (startVerse, startWord) <= (endVerse, endWord) regardless
+  // of drag direction.
   int? get startVerse {
     if (anchorVerse == null || focusVerse == null) return anchorVerse;
-    return anchorVerse! <= focusVerse! ? anchorVerse : focusVerse;
+    return _anchorAtOrBeforeFocus ? anchorVerse : focusVerse;
   }
 
   int? get endVerse {
     if (anchorVerse == null || focusVerse == null) return anchorVerse;
-    return anchorVerse! >= focusVerse! ? anchorVerse : focusVerse;
+    return _anchorAtOrBeforeFocus ? focusVerse : anchorVerse;
   }
 
   int? get startWord {
     if (anchorVerse == null || focusVerse == null) return anchorWord;
-    return anchorVerse! <= focusVerse! ? anchorWord : focusWord;
+    return _anchorAtOrBeforeFocus ? anchorWord : focusWord;
   }
 
   int? get endWord {
     if (anchorVerse == null || focusVerse == null) return anchorWord;
-    return anchorVerse! >= focusVerse! ? anchorWord : focusWord;
+    return _anchorAtOrBeforeFocus ? focusWord : anchorWord;
   }
 
   /// Returns the selected word range `(startIdx, endIdx)` for [verseNumber],

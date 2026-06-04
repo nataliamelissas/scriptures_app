@@ -67,6 +67,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   OverlayEntry? _startHandleOverlay;
   OverlayEntry? _endHandleOverlay;
   OverlayEntry? _notePopupOverlay;
+  PersistentBottomSheetController? _activeHighlightSheet;
 
   @override
   void initState() {
@@ -372,6 +373,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     _startHandleOverlay = null;
     _endHandleOverlay?.remove();
     _endHandleOverlay = null;
+    _activeHighlightSheet?.close();
+    _activeHighlightSheet = null;
   }
 
   void _onHandleDragUpdate(Offset globalPos, {required bool isStart}) {
@@ -502,7 +505,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             .read(verseSelectionProvider.notifier)
             .startSelection(anchor.$1, anchor.$2);
       }
-      setState(() {}); // switches to NeverScrollableScrollPhysics
+      // Note: no setState here. Flutter's default scroll behavior on
+      // web/desktop excludes mouse from dragDevices, so the ListView won't
+      // scroll under us. Rebuilding the parent here would tear down the
+      // pointer route mid-drag and freeze the selection at one word.
     }
     if (_isDragSelecting) {
       final hit = _hitTest(pos);
@@ -532,6 +538,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   void _onPointerCancel(PointerCancelEvent event) {
+    // CRITICAL: GestureBinding.cancelPointer() (called when a recognizer
+    // rejects) synthesizes a PointerCancelEvent with NO kind argument — it
+    // defaults to PointerDeviceKind.touch regardless of the original
+    // pointer. So we CANNOT use event.kind to detect "this is a mouse
+    // cancel"; the kind is always touch on synthetic cancels. Use the
+    // _isMouseDown flag (which we set from the real PointerDown) instead.
+    if (_isMouseDown) return;
     if (!_longPressRecognized) {
       _removeLoadingCircle();
       _pointerDownPos = null;
@@ -539,6 +552,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   void _onLongPressStart(LongPressStartDetails details) {
+    if (_isMouseDown) return; // mouse Listener owns the gesture
     if (_isDragSelecting) return; // mouse drag already started
     _longPressRecognized = true;
     // Schedule the action for the next frame. If a drag update arrives
@@ -562,6 +576,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   void _onLongPressMoveUpdate(LongPressMoveUpdateDetails details) {
+    if (_isMouseDown) return; // mouse Listener owns the gesture
     if (!_isDragSelecting) {
       _isDragSelecting = true;
       _removeLoadingCircle();
@@ -584,6 +599,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   void _onLongPressEnd(LongPressEndDetails details) {
+    if (_isMouseDown) return; // mouse Listener owns the gesture
     _removeLoadingCircle();
     if (_isDragSelecting) {
       final selection = ref.read(verseSelectionProvider);
@@ -598,6 +614,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   void _onLongPressCancel() {
+    // For mouse, the Listener drives selection — the long-press recognizer
+    // fires onLongPressCancel as soon as the cursor moves past its slop,
+    // which would clobber the in-progress mouse-drag selection. Bail out.
+    if (_isMouseDown) return;
     _removeLoadingCircle();
     _isDragSelecting = false;
     _longPressRecognized = false;
@@ -614,7 +634,31 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _updateHandleOverlays(note);
     });
-    _showVerseActions(context, verse);
+    _showActiveHighlightSheet(context, verse);
+  }
+
+  /// Shows the verse action sheet as a NON-modal persistent bottom sheet so
+  /// the resize handles above it remain tappable. Dismissed by tap-away
+  /// (via [_onPointerDown]) or by [clearActiveHighlight].
+  void _showActiveHighlightSheet(BuildContext context, ScriptureVerse verse) {
+    _activeHighlightSheet?.close();
+    _activeHighlightSheet = Scaffold.of(context).showBottomSheet(
+      (_) => VerseActionSheet(
+        verse: verse,
+        projectId: widget.project.id,
+        volume: widget.volume,
+        bookApiId: widget.bookApiId,
+        chapter: _currentChapter,
+        bookTitle: widget.bookTitle,
+        onDone: () => ref.invalidate(chapterNotesProvider),
+      ),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+    );
+    _activeHighlightSheet!.closed.whenComplete(() {
+      _activeHighlightSheet = null;
+    });
   }
 
   void _showVerseActions(BuildContext context, ScriptureVerse verse) {
