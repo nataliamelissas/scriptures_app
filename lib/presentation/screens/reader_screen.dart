@@ -538,12 +538,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   void _onPointerCancel(PointerCancelEvent event) {
-    // CRITICAL: GestureBinding.cancelPointer() (called when a recognizer
-    // rejects) synthesizes a PointerCancelEvent with NO kind argument — it
-    // defaults to PointerDeviceKind.touch regardless of the original
-    // pointer. So we CANNOT use event.kind to detect "this is a mouse
-    // cancel"; the kind is always touch on synthetic cancels. Use the
-    // _isMouseDown flag (which we set from the real PointerDown) instead.
+    // Synthetic cancels default to kind=touch, so gate on _isMouseDown
+    // (set from the real PointerDown) rather than event.kind.
     if (_isMouseDown) return;
     if (!_longPressRecognized) {
       _removeLoadingCircle();
