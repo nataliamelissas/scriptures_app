@@ -20,7 +20,7 @@ final openScriptureApiProvider =
     Provider<OpenScriptureApi>((ref) => OpenScriptureApi());
 
 final localScriptureSourceProvider = Provider<LocalScriptureSource>(
-  (ref) => const LocalScriptureSource(
+  (ref) => LocalScriptureSource(
     basePath: LocalScriptureConfig.basePath,
   ),
 );

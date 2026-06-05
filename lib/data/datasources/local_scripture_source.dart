@@ -18,7 +18,7 @@ class LocalScriptureSource {
   final String basePath;
 
   /// [basePath] is the root folder containing volume subfolders.
-  /// e.g. "***REMOVED***"
+  /// e.g. `"/path/to/your-vault/scriptures"`
   const LocalScriptureSource({required this.basePath});
 
   /// Lists book folders within a volume folder.

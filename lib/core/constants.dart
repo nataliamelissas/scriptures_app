@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 /// OpenScriptureAPI configuration.
 class ApiConfig {
@@ -22,9 +23,11 @@ class ApiConfig {
 
 /// Local scripture fallback file configuration.
 class LocalScriptureConfig {
-  // TODO: Make this configurable via settings or environment
-  static const basePath =
-      r'***REMOVED***';
+  static const envKey = 'SCRIPTURE_BASE_PATH';
+
+  /// Reads the base path from the `.env` file at runtime.
+  /// Returns an empty string if the key is absent (graceful degradation).
+  static String get basePath => dotenv.env[envKey] ?? '';
 }
 
 /// Database configuration.
