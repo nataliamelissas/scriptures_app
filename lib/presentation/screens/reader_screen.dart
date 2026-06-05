@@ -449,9 +449,19 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         note: note,
         anchorGlobal: anchorGlobal,
         onSave: (text) async {
-          final updated = note.copyWith(content: text.isEmpty ? null : text);
+          final updated = text.isEmpty
+              ? note.copyWith(clearContent: true)
+              : note.copyWith(content: text);
           await ref.read(noteRepositoryProvider).update(updated);
           ref.invalidate(chapterNotesProvider);
+          // Keep the active highlight in sync so re-opening the note from the
+          // floating pill shows the just-saved content. The pill reads
+          // activeHighlight, which would otherwise hold the stale (pre-save)
+          // note until the user taps away and re-taps the highlight.
+          final active = ref.read(verseSelectionProvider).activeHighlight;
+          if (active?.id == updated.id) {
+            ref.read(verseSelectionProvider.notifier).setActiveHighlight(updated);
+          }
           _removeNotePopup();
         },
         onDismiss: _removeNotePopup,

@@ -141,6 +141,7 @@ class StudyNote {
   StudyNote copyWith({
     int? verseNumber,
     String? content,
+    bool clearContent = false,
     int? highlightColorValue,
     int? endVerseNumber,
     bool clearEndVerseNumber = false,
@@ -157,7 +158,7 @@ class StudyNote {
       chapter: chapter,
       verseNumber: verseNumber ?? this.verseNumber,
       type: type,
-      content: content ?? this.content,
+      content: clearContent ? null : (content ?? this.content),
       highlightColorValue: highlightColorValue ?? this.highlightColorValue,
       endVerseNumber:
           clearEndVerseNumber ? null : (endVerseNumber ?? this.endVerseNumber),

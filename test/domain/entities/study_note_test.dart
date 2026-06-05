@@ -10,6 +10,7 @@ import 'package:scriptures_app/domain/entities/study_project.dart';
 void main() {
   StudyNote note({
     int verseNumber = 5,
+    String? content,
     int? endVerseNumber,
     int? startWordIndex,
     int? endWordIndex,
@@ -22,6 +23,7 @@ void main() {
         chapter: 32,
         verseNumber: verseNumber,
         type: NoteType.highlight,
+        content: content,
         highlightColorValue: 0xFF00FF00,
         endVerseNumber: endVerseNumber,
         startWordIndex: startWordIndex,
@@ -59,6 +61,15 @@ void main() {
       );
       expect(whole.startWordIndex, isNull);
       expect(whole.endWordIndex, isNull);
+    });
+
+    test('clearContent nulls an existing note body (emptying the text field)',
+        () {
+      final annotated = note(content: 'faith is a seed');
+      // Saving the note popup with an empty text field must remove the body,
+      // not retain the prior content via the `?? this` idiom.
+      final cleared = annotated.copyWith(clearContent: true);
+      expect(cleared.content, isNull);
     });
 
     test('a clear flag takes precedence over a concurrently-passed value', () {
