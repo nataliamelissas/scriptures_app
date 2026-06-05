@@ -550,7 +550,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       _isMouseDown = false;
       if (_isDragSelecting) {
         final selection = ref.read(verseSelectionProvider);
-        if (selection.isSelecting) _showHighlightColorPicker(selection);
+        if (selection.isSelecting) _commitSelectionHighlight(selection);
         _isDragSelecting = false;
         if (mounted) setState(() {});
       }
@@ -627,7 +627,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     if (_isDragSelecting) {
       final selection = ref.read(verseSelectionProvider);
       if (selection.isSelecting) {
-        _showHighlightColorPicker(selection);
+        _commitSelectionHighlight(selection);
       }
     }
     _isDragSelecting = false;
@@ -660,9 +660,36 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     _showHighlightActionBar(note);
   }
 
-  /// Shows the compact, bottom-pinned action bar for the active highlight.
-  /// It's an overlay covering only a thin strip, so the scripture above stays
-  /// fully scrollable. Dismissed by tap-away (via [_onPointerDown]) or by
+  /// Global rect of the active highlight's start (first) anchor word — the
+  /// point the floating action bar hovers above. Falls back to the verse box
+  /// when word keys aren't laid out yet.
+  Rect? _activeHighlightAnchorRect() {
+    final note = ref.read(verseSelectionProvider).activeHighlight;
+    if (note == null) return null;
+    final keys = _wordKeys[note.verseNumber];
+    final wordIdx = note.startWordIndex ?? 0;
+    final ctx = (keys != null && wordIdx < keys.length)
+        ? keys[wordIdx].currentContext
+        : _verseKeys[note.verseNumber]?.currentContext;
+    final box = ctx?.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached) return null;
+    return box.localToGlobal(Offset.zero) & box.size;
+  }
+
+  /// Top/bottom Y of the scrolling reading window (the [ListView] viewport),
+  /// in global coords. Used to pin the action bar to the top when the highlight
+  /// scrolls off-screen above.
+  (double, double)? _readingWindowBounds() {
+    final box = _listKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached) return null;
+    final top = box.localToGlobal(Offset.zero).dy;
+    return (top, top + box.size.height);
+  }
+
+  /// Shows the compact, floating action bar that hovers just above the active
+  /// highlight. It tracks scrolling and sticks to the top of the reading
+  /// window when the highlight scrolls off-screen above (see
+  /// [_HighlightActionBar]). Dismissed by tap-away (via [_onPointerDown]) or by
   /// [_removeHandleOverlays].
   void _showHighlightActionBar(StudyNote note) {
     _actionBarOverlay?.remove();
@@ -671,6 +698,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         initialColor: note.highlightColorValue != null
             ? Color(note.highlightColorValue!)
             : HighlightColors.yellow,
+        scrollController: _scrollController,
+        resolveAnchorRect: _activeHighlightAnchorRect,
+        resolveWindowBounds: _readingWindowBounds,
         onRecolor: _recolorActiveHighlight,
         onNote: _editActiveHighlightNote,
         onDelete: _deleteActiveHighlight,
@@ -691,9 +721,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   void _editActiveHighlightNote() {
     final note = ref.read(verseSelectionProvider).activeHighlight;
     if (note == null) return;
-    // Anchor the popup just above the action bar, horizontally centered.
+    // Anchor the popup to the highlight itself; _NoteEditPopup flips below and
+    // clamps when there isn't room above.
+    final rect = _activeHighlightAnchorRect();
     final size = MediaQuery.of(context).size;
-    _showNotePopup(note, Offset(size.width / 2, size.height - 80));
+    _showNotePopup(note, rect?.topCenter ?? Offset(size.width / 2, size.height / 2));
   }
 
   Future<void> _deleteActiveHighlight() async {
@@ -721,37 +753,16 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     );
   }
 
-  void _showHighlightColorPicker(VerseSelectionState selection) {
-    // whenComplete fires for every dismissal path — color pick, Cancel
-    // button, scrim tap, system back. Centralizes selection cleanup so
-    // phantom highlights can't persist after the sheet is gone.
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => _HighlightColorPicker(
-        onColorSelected: (color) {
-          Navigator.pop(context);
-          _saveHighlight(selection, color);
-        },
-        onCancel: () => Navigator.pop(context),
-      ),
-    ).whenComplete(() {
-      if (mounted) {
-        ref.read(verseSelectionProvider.notifier).clearSelection();
-      }
-    });
-  }
-
-  Future<void> _saveHighlight(
-      VerseSelectionState selection, Color color) async {
+  /// Commits a fresh drag-selection as a highlight with the default color, then
+  /// surfaces the floating action bar above it (recolor / note / delete). The
+  /// selection is cleared and the new note becomes the active highlight, so the
+  /// flow mirrors tapping an existing highlight.
+  Future<void> _commitSelectionHighlight(VerseSelectionState selection) async {
     final startVerse = selection.startVerse;
     final endVerse = selection.endVerse;
     if (startVerse == null || endVerse == null) return;
 
-    final repo = ref.read(noteRepositoryProvider);
-    await repo.create(StudyNote(
+    final created = await ref.read(noteRepositoryProvider).create(StudyNote(
       id: '',
       projectId: widget.project.id,
       volume: widget.volume,
@@ -762,10 +773,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       startWordIndex: selection.startWord,
       endWordIndex: selection.endWord,
       type: NoteType.highlight,
-      highlightColorValue: color.toARGB32(),
+      highlightColorValue: HighlightColors.yellow.toARGB32(),
       createdAt: DateTime.now(),
     ));
+    if (!mounted) return;
+    ref.read(verseSelectionProvider.notifier).clearSelection();
     ref.invalidate(chapterNotesProvider);
+    _onTapHighlight(created); // sets active + shows handles + floating bar
   }
 
   // ── Build ────────────────────────────────────────────────────────────────
@@ -1051,35 +1065,83 @@ class _HighlightHandle extends StatelessWidget {
 
 // ── Active-highlight action bar ───────────────────────────────────────────
 
-/// Compact, bottom-pinned bar shown while a highlight is active. Shows a single
-/// swatch of the current color that smoothly expands into the full palette;
-/// picking a color (or re-picking the same one) collapses it again. Also offers
-/// note and delete actions. Covers only a thin strip so the scripture above
-/// stays scrollable.
-class _HighlightActionBar extends StatefulWidget {
+/// Top Y for the floating action bar. Floats [gap] above [anchorTop]; once the
+/// anchor scrolls high enough that the bar would cross `windowTop + margin`, it
+/// sticks there; it never leaves the reading window. Pure and frame-driven, so
+/// the bar glides smoothly as [anchorTop] changes with scroll — no animation
+/// controller needed. Public for unit testing.
+double highlightActionBarTop({
+  required double anchorTop,
+  required double windowTop,
+  required double windowBottom,
+  required double barHeight,
+  required double gap,
+  required double margin,
+}) {
+  final desired = anchorTop - gap - barHeight; // float above the highlight
+  final stuckToTop = windowTop + margin; // pinned-to-top floor
+  final maxTop = windowBottom - barHeight - margin; // keep inside the window
+  final floored = math.max(desired, stuckToTop);
+  return floored.clamp(stuckToTop, math.max(stuckToTop, maxTop));
+}
+
+/// Compact, rounded action bar that floats just above the active highlight. It
+/// tracks the highlight as the list scrolls and sticks to the top of the
+/// reading window when the highlight scrolls off-screen above. Two faces share
+/// one fixed footprint: the main face (current-color swatch · note · delete)
+/// and the palette face (the full swatch row), swapped when the swatch is
+/// tapped. Picking a color recolors and collapses back to the main face.
+class _HighlightActionBar extends ConsumerStatefulWidget {
   final Color initialColor;
+  final ScrollController scrollController;
+  final Rect? Function() resolveAnchorRect;
+  final (double, double)? Function() resolveWindowBounds;
   final ValueChanged<Color> onRecolor;
   final VoidCallback onNote;
   final VoidCallback onDelete;
 
   const _HighlightActionBar({
     required this.initialColor,
+    required this.scrollController,
+    required this.resolveAnchorRect,
+    required this.resolveWindowBounds,
     required this.onRecolor,
     required this.onNote,
     required this.onDelete,
   });
 
   @override
-  State<_HighlightActionBar> createState() => _HighlightActionBarState();
+  ConsumerState<_HighlightActionBar> createState() =>
+      _HighlightActionBarState();
 }
 
-class _HighlightActionBarState extends State<_HighlightActionBar> {
+class _HighlightActionBarState extends ConsumerState<_HighlightActionBar> {
   late Color _current = widget.initialColor;
   bool _expanded = false;
 
-  static const _swatchSize = 30.0;
-  static const _paletteSwatchSize = 38.0;
-  static const _anim = Duration(milliseconds: 200);
+  static const _barWidth = 244.0;
+  static const _barHeight = 52.0;
+  static const _gap = 10.0;
+  static const _topMargin = 8.0;
+  static const _edgeMargin = 12.0;
+  static const _anim = Duration(milliseconds: 180);
+
+  @override
+  void initState() {
+    super.initState();
+    widget.scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    widget.scrollController.removeListener(_onScroll);
+    super.dispose();
+  }
+
+  // Recompute the bar position every scroll frame so it glides smoothly.
+  void _onScroll() {
+    if (mounted) setState(() {});
+  }
 
   void _pick(Color color) {
     setState(() {
@@ -1091,86 +1153,96 @@ class _HighlightActionBarState extends State<_HighlightActionBar> {
 
   @override
   Widget build(BuildContext context) {
+    // Rebuild when the active highlight / live handle-drag positions change so
+    // the bar follows handle resizes as well as scrolling.
+    ref.watch(verseSelectionProvider);
+
+    final anchor = widget.resolveAnchorRect();
+    final bounds = widget.resolveWindowBounds();
+    if (anchor == null || bounds == null) return const SizedBox.shrink();
+
+    final top = highlightActionBarTop(
+      anchorTop: anchor.top,
+      windowTop: bounds.$1,
+      windowBottom: bounds.$2,
+      barHeight: _barHeight,
+      gap: _gap,
+      margin: _topMargin,
+    );
+    final screenWidth = MediaQuery.of(context).size.width;
+    final left = (anchor.center.dx - _barWidth / 2).clamp(
+      _edgeMargin,
+      math.max(_edgeMargin, screenWidth - _barWidth - _edgeMargin),
+    ).toDouble();
+
     final theme = Theme.of(context);
     return Positioned(
-      left: 0,
-      right: 0,
-      bottom: 0,
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Palette that grows upward "over" the bar when expanded.
-            AnimatedSize(
-              duration: _anim,
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.bottomCenter,
-              child: _expanded
-                  ? Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                      child: Material(
-                        elevation: 3,
-                        borderRadius: BorderRadius.circular(28),
-                        color: theme.colorScheme.surface,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 10),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              for (final color in HighlightColors.all)
-                                Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 6),
-                                  child: _Swatch(
-                                    color: color,
-                                    size: _paletteSwatchSize,
-                                    selected: color.toARGB32() ==
-                                        _current.toARGB32(),
-                                    onTap: () => _pick(color),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    )
-                  : const SizedBox(width: double.infinity),
-            ),
-            // Main bar.
-            Material(
-              elevation: 8,
-              color: theme.colorScheme.surface,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 10, 12, 10),
-                child: Row(
-                  children: [
-                    // Current-color swatch — tap to expand the palette.
-                    _Swatch(
-                      color: _current,
-                      size: _swatchSize,
-                      selected: _expanded,
-                      onTap: () => setState(() => _expanded = !_expanded),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.sticky_note_2_outlined),
-                      tooltip: 'Note',
-                      onPressed: widget.onNote,
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline),
-                      tooltip: 'Delete highlight',
-                      color: theme.colorScheme.error,
-                      onPressed: widget.onDelete,
-                    ),
-                  ],
-                ),
+      left: left,
+      top: top,
+      child: Material(
+        elevation: 8,
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(24),
+        child: SizedBox(
+          width: _barWidth,
+          height: _barHeight,
+          child: AnimatedSwitcher(
+            duration: _anim,
+            child: _expanded ? _paletteFace(theme) : _mainFace(theme),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _mainFace(ThemeData theme) {
+    return Padding(
+      key: const ValueKey('main'),
+      padding: const EdgeInsets.fromLTRB(16, 0, 6, 0),
+      child: Row(
+        children: [
+          // Current-color swatch — tap to reveal the palette face.
+          _Swatch(
+            color: _current,
+            size: 30,
+            selected: false,
+            onTap: () => setState(() => _expanded = true),
+          ),
+          const Spacer(),
+          IconButton(
+            icon: const Icon(Icons.sticky_note_2_outlined),
+            tooltip: 'Note',
+            onPressed: widget.onNote,
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Delete highlight',
+            color: theme.colorScheme.error,
+            onPressed: widget.onDelete,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _paletteFace(ThemeData theme) {
+    return Padding(
+      key: const ValueKey('palette'),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (final color in HighlightColors.all)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: _Swatch(
+                color: color,
+                size: 32,
+                selected: color.toARGB32() == _current.toARGB32(),
+                onTap: () => _pick(color),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -1348,74 +1420,6 @@ class _NoteEditPopupState extends State<_NoteEditPopup> {
           ),
         ),
       ],
-    );
-  }
-}
-
-// ── Compact highlight color picker ────────────────────────────────────────
-
-class _HighlightColorPicker extends StatelessWidget {
-  final ValueChanged<Color> onColorSelected;
-  final VoidCallback onCancel;
-
-  const _HighlightColorPicker({
-    required this.onColorSelected,
-    required this.onCancel,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle bar
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.onSurface.withAlpha(60),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text('Choose highlight color',
-                style: theme.textTheme.titleMedium),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: HighlightColors.all.map((color) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: GestureDetector(
-                    onTap: () => onColorSelected(color),
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                            color: theme.colorScheme.outlineVariant),
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: onCancel,
-              child: const Text('Cancel'),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
