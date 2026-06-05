@@ -40,6 +40,23 @@ class ScriptureBook {
   });
 }
 
+/// Lightweight overview of a book's chapters, used by the chapter picker.
+class BookChapters {
+  final String bookApiId;
+  final String bookTitle;
+  final int chapterCount;
+
+  /// "Chapter" for most books, "Section" for D&C. Drives the page header label.
+  final String delineation;
+
+  const BookChapters({
+    required this.bookApiId,
+    required this.bookTitle,
+    required this.chapterCount,
+    this.delineation = 'Chapter',
+  });
+}
+
 /// A single chapter with its verses and metadata.
 class ScriptureChapter {
   final String bookApiId;

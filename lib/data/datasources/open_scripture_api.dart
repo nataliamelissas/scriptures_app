@@ -33,6 +33,34 @@ class OpenScriptureApi {
     }).toList();
   }
 
+  /// GET /volume/{volumeId}/{bookId}
+  /// Returns the book's chapter list; we only need its length and the
+  /// delineation ("Chapter" vs "Section" for D&C).
+  Future<BookChapters> fetchBookChapters(
+    StandardWork volume,
+    String bookApiId,
+  ) async {
+    final url = Uri.parse(
+      '${ApiConfig.baseUrl}/volume/${volume.apiVolumeId}/$bookApiId',
+    );
+    final response = await _client.get(url).timeout(
+        const Duration(seconds: ApiConfig.timeoutSeconds));
+
+    if (response.statusCode != 200) {
+      throw ApiException('Failed to fetch book: ${response.statusCode}');
+    }
+
+    final data = json.decode(response.body) as Map<String, dynamic>;
+    final chapters = data['chapters'] as List<dynamic>? ?? [];
+
+    return BookChapters(
+      bookApiId: bookApiId,
+      bookTitle: data['title'] as String? ?? bookApiId,
+      chapterCount: chapters.length,
+      delineation: data['chapterDelineation'] as String? ?? 'Chapter',
+    );
+  }
+
   /// GET /volume/{volumeId}/{bookId}/{chapter}
   /// Returns full chapter with verses, footnotes, summary, and nav links.
   Future<ScriptureChapter> fetchChapter(

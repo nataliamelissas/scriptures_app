@@ -178,6 +178,15 @@ final booksProvider =
   return ref.read(scriptureRepositoryProvider).getBooks(volume);
 });
 
+/// Chapter overview (count + delineation) for a book, used by the chapter
+/// picker. Record-keyed so the family gets value-equality for free.
+final bookChaptersProvider =
+    FutureProvider.family<BookChapters, ({StandardWork volume, String bookApiId})>(
+  (ref, args) => ref
+      .read(scriptureRepositoryProvider)
+      .getBookChapters(args.volume, args.bookApiId),
+);
+
 /// Parameter for loading a chapter.
 class ChapterParams {
   final StandardWork volume;

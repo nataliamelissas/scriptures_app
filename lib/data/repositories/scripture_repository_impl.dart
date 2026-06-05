@@ -24,6 +24,32 @@ class ScriptureRepositoryImpl implements ScriptureRepository {
   }
 
   @override
+  Future<BookChapters> getBookChapters(
+    StandardWork volume,
+    String bookApiId,
+  ) async {
+    try {
+      final overview = await _api.fetchBookChapters(volume, bookApiId);
+      if (overview.chapterCount > 0) return overview;
+    } catch (_) {
+      // Fall through to local
+    }
+
+    // For local, resolve the display title (folder name) from the book list,
+    // mirroring getChapter below.
+    final localBooks = await _local.getBooks(volume);
+    final match = localBooks.where((b) => b.apiId == bookApiId).toList();
+    final bookTitle = match.isNotEmpty ? match.first.title : bookApiId;
+    final count = await _local.getChapterCount(volume, bookTitle);
+
+    return BookChapters(
+      bookApiId: bookApiId,
+      bookTitle: bookTitle,
+      chapterCount: count,
+    );
+  }
+
+  @override
   Future<ScriptureChapter> getChapter(
     StandardWork volume,
     String bookApiId,

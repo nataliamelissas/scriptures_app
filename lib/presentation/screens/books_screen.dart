@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/scripture.dart';
 import '../../domain/entities/study_project.dart';
 import '../providers/providers.dart';
-import 'reader_screen.dart';
+import 'chapters_screen.dart';
 
 /// Lists all books within a standard work.
 class BooksScreen extends ConsumerWidget {
@@ -43,16 +43,15 @@ class BooksScreen extends ConsumerWidget {
               title: Text(book.title, style: theme.textTheme.titleMedium),
               trailing: const Icon(Icons.chevron_right),
               onTap: () {
-                // Open chapter 1 by default; user navigates from there
+                // Show the chapter picker; the user taps a chapter from there.
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ReaderScreen(
+                    builder: (_) => ChaptersScreen(
                       project: project,
                       volume: volume,
                       bookApiId: book.apiId,
                       bookTitle: book.title,
-                      initialChapter: 1,
                     ),
                   ),
                 );
