@@ -1,0 +1,19 @@
+rules_version = '2';
+
+// Deny-all default. Cloud Storage is locked until access is granted explicitly
+// per path as features are added. NEVER replace this with
+// `allow read, write: if true;`.
+//
+// Example of granting owner-only access once Auth is wired up:
+//   match /users/{userId}/{allPaths=**} {
+//     allow read, write: if request.auth != null && request.auth.uid == userId;
+//   }
+//
+// Deploy with: firebase deploy --only storage
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
