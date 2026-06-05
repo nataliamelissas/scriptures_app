@@ -55,3 +55,10 @@ macos/Runner/GoogleService-Info.plist
 
 # Claude settings
 .claude/settings.local.json
+
+# Local environment
+.env
+
+# Firebase config (contains project keys/IDs — regenerate via `flutterfire configure`)
+lib/firebase_options.dart
+firebase.json
