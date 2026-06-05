@@ -1198,8 +1198,9 @@ class _HighlightActionBarState extends ConsumerState<_HighlightActionBar> {
   Widget _mainFace(ThemeData theme) {
     return Padding(
       key: const ValueKey('main'),
-      padding: const EdgeInsets.fromLTRB(16, 0, 6, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // Current-color swatch — tap to reveal the palette face.
           _Swatch(
@@ -1208,7 +1209,7 @@ class _HighlightActionBarState extends ConsumerState<_HighlightActionBar> {
             selected: false,
             onTap: () => setState(() => _expanded = true),
           ),
-          const Spacer(),
+          const SizedBox(width: 8),
           IconButton(
             icon: const Icon(Icons.sticky_note_2_outlined),
             tooltip: 'Note',
