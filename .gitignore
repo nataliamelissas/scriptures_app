@@ -18,10 +18,8 @@ migrate_working_dir/
 *.iws
 .idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
+# Editor config (local)
+.vscode/
 
 # Flutter/Dart/Pub related
 **/doc/api/
@@ -53,8 +51,11 @@ android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
 macos/Runner/GoogleService-Info.plist
 
-# Claude settings
-.claude/settings.local.json
+# Claude/agent settings (local)
+.claude/
+
+# Flutter DevTools local state
+devtools_options.yaml
 
 # Local environment
 .env
