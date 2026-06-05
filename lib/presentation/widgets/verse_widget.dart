@@ -23,6 +23,13 @@ class VerseWidget extends ConsumerWidget {
   /// by [ReaderScreen] so it can hit-test words during drag.
   final List<GlobalKey> wordKeys;
 
+  /// Shared [LayerLink]s owned by [ReaderScreen]. When a word in this verse is
+  /// the active highlight's start/end anchor it is wrapped in a
+  /// [CompositedTransformTarget] for the matching link, so the resize-handle
+  /// followers in the overlay stay glued to the word as the list scrolls.
+  final LayerLink startLink;
+  final LayerLink endLink;
+
   const VerseWidget({
     super.key,
     required this.verse,
@@ -30,6 +37,8 @@ class VerseWidget extends ConsumerWidget {
     required this.textScale,
     required this.onTapHighlight,
     required this.wordKeys,
+    required this.startLink,
+    required this.endLink,
   });
 
   @override
@@ -82,6 +91,38 @@ class VerseWidget extends ConsumerWidget {
         activeBorderRange =
             wordRangeForNote(activeNote, verse.number, words.length);
       }
+    }
+
+    // Which word in THIS verse (if any) is the active highlight's start/end
+    // anchor. Those words carry a CompositedTransformTarget that the resize
+    // handles follow. Only the start verse carries the start anchor and only
+    // the end verse carries the end anchor (a single-word highlight carries
+    // both on the same word).
+    int? startAnchorWord;
+    int? endAnchorWord;
+    if (isDragging && liveStartV != null && liveEndV != null) {
+      if (verse.number == liveStartV) startAnchorWord = liveStartW ?? 0;
+      if (verse.number == liveEndV) endAnchorWord = liveEndW ?? (words.length - 1);
+    } else if (activeId != null) {
+      final activeNote = highlights.where((n) => n.id == activeId).firstOrNull;
+      if (activeNote != null) {
+        final aEndVerse = activeNote.endVerseNumber ?? activeNote.verseNumber;
+        if (verse.number == activeNote.verseNumber) {
+          startAnchorWord = activeNote.startWordIndex ?? 0;
+        }
+        if (verse.number == aEndVerse) {
+          endAnchorWord = activeNote.endWordIndex ?? (words.length - 1);
+        }
+      }
+    }
+    // Guard against out-of-range indices from stale/legacy data.
+    if (startAnchorWord != null &&
+        (startAnchorWord < 0 || startAnchorWord >= words.length)) {
+      startAnchorWord = null;
+    }
+    if (endAnchorWord != null &&
+        (endAnchorWord < 0 || endAnchorWord >= words.length)) {
+      endAnchorWord = null;
     }
 
     final borderColor = theme.colorScheme.primary.withAlpha(180);
@@ -173,6 +214,15 @@ class VerseWidget extends ConsumerWidget {
                         behavior: HitTestBehavior.opaque,
                         child: chip,
                       );
+                    }
+
+                    // Anchor the resize-handle followers to this word. Nest
+                    // when a single word is both start and end anchor.
+                    if (startAnchorWord != null && i == startAnchorWord) {
+                      chip = CompositedTransformTarget(link: startLink, child: chip);
+                    }
+                    if (endAnchorWord != null && i == endAnchorWord) {
+                      chip = CompositedTransformTarget(link: endLink, child: chip);
                     }
 
                     return chip;

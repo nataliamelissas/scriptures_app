@@ -67,7 +67,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   OverlayEntry? _startHandleOverlay;
   OverlayEntry? _endHandleOverlay;
   OverlayEntry? _notePopupOverlay;
-  PersistentBottomSheetController? _activeHighlightSheet;
+
+  /// Compact, bottom-pinned action bar shown while a highlight is active.
+  /// Covers only a thin strip so the scripture above stays scrollable.
+  OverlayEntry? _actionBarOverlay;
+
+  // Links shared with each VerseWidget; the handle followers stay glued to the
+  // active highlight's start/end anchor words via these.
+  final LayerLink _startLink = LayerLink();
+  final LayerLink _endLink = LayerLink();
 
   @override
   void initState() {
@@ -99,9 +107,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   void _onScroll() {
     if (_inRestoration) return;
     _recomputeTopVerse();
-    // Reposition handles when the list scrolls.
-    final active = ref.read(verseSelectionProvider).activeHighlight;
-    if (active != null) _updateHandleOverlays(active);
+    // Handles are CompositedTransformFollowers glued to their anchor words, so
+    // they track scrolling on their own — no manual repositioning needed here.
   }
 
   void _recomputeTopVerse() {
@@ -327,54 +334,58 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   // ── Handle overlays ──────────────────────────────────────────────────────
 
-  void _updateHandleOverlays(StudyNote note) {
-    _removeHandleOverlays();
+  /// Inserts the two resize-handle followers for the active highlight. The
+  /// handles are [CompositedTransformFollower]s glued to the start/end anchor
+  /// words (see [VerseWidget]); they track the words frame-perfectly as the
+  /// list scrolls and hide themselves when an anchor scrolls off-screen, so
+  /// nothing needs repositioning on scroll.
+  void _showHandleOverlays() {
+    _removeHandleOverlaysOnly();
+    if (ref.read(verseSelectionProvider).activeHighlight == null) return;
 
-    final startWordIdx = note.startWordIndex ?? 0;
-    final endVerse = note.endVerseNumber ?? note.verseNumber;
-    final endWords = VerseWidget.tokenize(_versesByNumber[endVerse]?.text ?? '');
-    final endWordIdx =
-        note.endWordIndex ?? (endWords.isEmpty ? 0 : endWords.length - 1);
-
-    final startKey = _wordKeys[note.verseNumber]?[startWordIdx];
-    final endKey = _wordKeys[endVerse]?[endWordIdx];
-
-    // Only show handles when both word containers are currently mounted.
-    if (startKey?.currentContext == null || endKey?.currentContext == null) return;
-
+    final overlay = Overlay.of(context);
     _startHandleOverlay = OverlayEntry(
       builder: (_) => _HighlightHandle(
-        wordKey: startKey!,
+        link: _startLink,
         isStart: true,
-        onDragStart: () =>
-            ref.read(verseSelectionProvider.notifier).beginHandleDrag(note),
+        onDragStart: _beginHandleDrag,
         onDragUpdate: (pos) => _onHandleDragUpdate(pos, isStart: true),
         onDragEnd: _onHandleDragEnd,
       ),
     );
     _endHandleOverlay = OverlayEntry(
       builder: (_) => _HighlightHandle(
-        wordKey: endKey!,
+        link: _endLink,
         isStart: false,
-        onDragStart: () =>
-            ref.read(verseSelectionProvider.notifier).beginHandleDrag(note),
+        onDragStart: _beginHandleDrag,
         onDragUpdate: (pos) => _onHandleDragUpdate(pos, isStart: false),
         onDragEnd: _onHandleDragEnd,
       ),
     );
-
-    final overlay = Overlay.of(context);
     overlay.insert(_startHandleOverlay!);
     overlay.insert(_endHandleOverlay!);
   }
 
-  void _removeHandleOverlays() {
+  void _beginHandleDrag() {
+    final active = ref.read(verseSelectionProvider).activeHighlight;
+    if (active != null) {
+      ref.read(verseSelectionProvider.notifier).beginHandleDrag(active);
+    }
+  }
+
+  /// Removes just the handle followers, leaving the active-highlight bottom
+  /// sheet in place.
+  void _removeHandleOverlaysOnly() {
     _startHandleOverlay?.remove();
     _startHandleOverlay = null;
     _endHandleOverlay?.remove();
     _endHandleOverlay = null;
-    _activeHighlightSheet?.close();
-    _activeHighlightSheet = null;
+  }
+
+  void _removeHandleOverlays() {
+    _removeHandleOverlaysOnly();
+    _actionBarOverlay?.remove();
+    _actionBarOverlay = null;
   }
 
   void _onHandleDragUpdate(Offset globalPos, {required bool isStart}) {
@@ -395,11 +406,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       if (hit.$1 < startV || (hit.$1 == startV && hit.$2 < startW)) return;
     }
 
+    // Updating the live drag position relocates the anchor word's
+    // CompositedTransformTarget, which the follower tracks automatically.
     ref
         .read(verseSelectionProvider.notifier)
         .updateHandleDrag(hit.$1, hit.$2, isStartHandle: isStart);
-    _startHandleOverlay?.markNeedsBuild();
-    _endHandleOverlay?.markNeedsBuild();
   }
 
   Future<void> _onHandleDragEnd() async {
@@ -409,18 +420,24 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
     final newStartVerse = s.liveStartVerse ?? note.verseNumber;
     final newEndVerse = s.liveEndVerse ?? note.endVerseNumber ?? note.verseNumber;
+    final isSingleVerse = newStartVerse == newEndVerse;
     final updated = note.copyWith(
       verseNumber: newStartVerse,
       startWordIndex: s.liveStartWord,
+      clearStartWordIndex: s.liveStartWord == null,
       endWordIndex: s.liveEndWord,
-      endVerseNumber: newStartVerse == newEndVerse ? null : newEndVerse,
+      clearEndWordIndex: s.liveEndWord == null,
+      endVerseNumber: isSingleVerse ? null : newEndVerse,
+      clearEndVerseNumber: isSingleVerse,
     );
 
     await ref.read(noteRepositoryProvider).update(updated);
     ref.invalidate(chapterNotesProvider);
     ref.read(verseSelectionProvider.notifier).endHandleDrag();
     ref.read(verseSelectionProvider.notifier).setActiveHighlight(updated);
-    _updateHandleOverlays(updated);
+    // Followers re-glue to the relocated anchors automatically once the new
+    // span is active; ensure the overlays are present (idempotent).
+    _showHandleOverlays();
   }
 
   // ── Note-only popup ──────────────────────────────────────────────────────
@@ -450,6 +467,16 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   // ── Gesture handlers ─────────────────────────────────────────────────────
 
+  /// Touch and stylus use the press-and-hold flow (with the progress circle)
+  /// so a quick drag still scrolls the chapter. Mouse, trackpad, and any other
+  /// precise pointer select directly on drag — no hold required. A laptop
+  /// trackpad reports [PointerDeviceKind.trackpad], not `mouse`, so gating only
+  /// on `mouse` would (wrongly) send it down the touch path.
+  static bool _isTouchPointer(PointerDeviceKind kind) =>
+      kind == PointerDeviceKind.touch ||
+      kind == PointerDeviceKind.stylus ||
+      kind == PointerDeviceKind.invertedStylus;
+
   void _onPointerDown(PointerDownEvent event) {
     // Dismiss note popup on any tap outside it.
     if (_notePopupOverlay != null) {
@@ -471,16 +498,16 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     _longPressRecognized = false;
     _isDragSelecting = false;
 
-    if (event.kind == PointerDeviceKind.mouse) {
+    if (!_isTouchPointer(event.kind)) {
       _isMouseDown = true;
-      // No loading circle for mouse.
+      // No loading circle for mouse/trackpad — they drag-select directly.
     } else {
       _showLoadingCircle(event.position);
     }
   }
 
   void _onPointerMove(PointerMoveEvent event) {
-    if (event.kind == PointerDeviceKind.mouse && _isMouseDown) {
+    if (!_isTouchPointer(event.kind) && _isMouseDown) {
       _handleMouseDragMove(event.position);
       return;
     }
@@ -519,7 +546,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   void _onPointerUp(PointerUpEvent event) {
-    if (event.kind == PointerDeviceKind.mouse) {
+    if (!_isTouchPointer(event.kind)) {
       _isMouseDown = false;
       if (_isDragSelecting) {
         final selection = ref.read(verseSelectionProvider);
@@ -624,37 +651,58 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   // ── Action sheet & color picker ──────────────────────────────────────────
 
-  void _onTapHighlight(BuildContext context, ScriptureVerse verse, StudyNote note) {
+  void _onTapHighlight(StudyNote note) {
     ref.read(verseSelectionProvider.notifier).setActiveHighlight(note);
-    // Show handles after a frame so word keys are rendered at correct positions.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _updateHandleOverlays(note);
-    });
-    _showActiveHighlightSheet(context, verse);
+    // The handle followers glue to the anchor words via LayerLink, so they can
+    // be inserted synchronously — no post-frame wait for word layout, which
+    // also removes the old tap-away race that left phantom handles behind.
+    _showHandleOverlays();
+    _showHighlightActionBar(note);
   }
 
-  /// Shows the verse action sheet as a NON-modal persistent bottom sheet so
-  /// the resize handles above it remain tappable. Dismissed by tap-away
-  /// (via [_onPointerDown]) or by [clearActiveHighlight].
-  void _showActiveHighlightSheet(BuildContext context, ScriptureVerse verse) {
-    _activeHighlightSheet?.close();
-    _activeHighlightSheet = Scaffold.of(context).showBottomSheet(
-      (_) => VerseActionSheet(
-        verse: verse,
-        projectId: widget.project.id,
-        volume: widget.volume,
-        bookApiId: widget.bookApiId,
-        chapter: _currentChapter,
-        bookTitle: widget.bookTitle,
-        onDone: () => ref.invalidate(chapterNotesProvider),
-      ),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+  /// Shows the compact, bottom-pinned action bar for the active highlight.
+  /// It's an overlay covering only a thin strip, so the scripture above stays
+  /// fully scrollable. Dismissed by tap-away (via [_onPointerDown]) or by
+  /// [_removeHandleOverlays].
+  void _showHighlightActionBar(StudyNote note) {
+    _actionBarOverlay?.remove();
+    _actionBarOverlay = OverlayEntry(
+      builder: (_) => _HighlightActionBar(
+        initialColor: note.highlightColorValue != null
+            ? Color(note.highlightColorValue!)
+            : HighlightColors.yellow,
+        onRecolor: _recolorActiveHighlight,
+        onNote: _editActiveHighlightNote,
+        onDelete: _deleteActiveHighlight,
       ),
     );
-    _activeHighlightSheet!.closed.whenComplete(() {
-      _activeHighlightSheet = null;
-    });
+    Overlay.of(context).insert(_actionBarOverlay!);
+  }
+
+  Future<void> _recolorActiveHighlight(Color color) async {
+    final note = ref.read(verseSelectionProvider).activeHighlight;
+    if (note == null) return;
+    final updated = note.copyWith(highlightColorValue: color.toARGB32());
+    await ref.read(noteRepositoryProvider).update(updated);
+    ref.invalidate(chapterNotesProvider);
+    ref.read(verseSelectionProvider.notifier).setActiveHighlight(updated);
+  }
+
+  void _editActiveHighlightNote() {
+    final note = ref.read(verseSelectionProvider).activeHighlight;
+    if (note == null) return;
+    // Anchor the popup just above the action bar, horizontally centered.
+    final size = MediaQuery.of(context).size;
+    _showNotePopup(note, Offset(size.width / 2, size.height - 80));
+  }
+
+  Future<void> _deleteActiveHighlight() async {
+    final note = ref.read(verseSelectionProvider).activeHighlight;
+    if (note == null) return;
+    await ref.read(noteRepositoryProvider).delete(note.id);
+    ref.invalidate(chapterNotesProvider);
+    ref.read(verseSelectionProvider.notifier).clearActiveHighlight();
+    _removeHandleOverlays();
   }
 
   void _showVerseActions(BuildContext context, ScriptureVerse verse) {
@@ -844,8 +892,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                               notes: verseNotes,
                               textScale: textScale,
                               wordKeys: wordKeys,
-                              onTapHighlight: (note) =>
-                                  _onTapHighlight(context, verse, note),
+                              startLink: _startLink,
+                              endLink: _endLink,
+                              onTapHighlight: _onTapHighlight,
                             ),
                           );
                         },
@@ -929,79 +978,235 @@ class _LongPressCircleState extends State<_LongPressCircle>
 
 // ── Highlight resize handle ───────────────────────────────────────────────
 
-class _HighlightHandle extends StatefulWidget {
-  final GlobalKey wordKey;
+class _HighlightHandle extends StatelessWidget {
+  /// Link to the anchor word's [CompositedTransformTarget] in [VerseWidget].
+  final LayerLink link;
   final bool isStart;
   final VoidCallback onDragStart;
   final ValueChanged<Offset> onDragUpdate;
   final VoidCallback onDragEnd;
 
   const _HighlightHandle({
-    required this.wordKey,
+    required this.link,
     required this.isStart,
     required this.onDragStart,
     required this.onDragUpdate,
     required this.onDragEnd,
   });
 
+  // Visible dot vs. (larger) transparent grab area.
+  static const double _dotSize = 12;
+  static const double _hitSize = 28;
+
   @override
-  State<_HighlightHandle> createState() => _HighlightHandleState();
+  Widget build(BuildContext context) {
+    // Glue the handle's centre to the bottom-left (start) / bottom-right (end)
+    // corner of the anchor word. The follower tracks the target every frame —
+    // through scrolling and resize — and hides itself when the target isn't
+    // currently painted (anchor scrolled off-screen) thanks to
+    // showWhenUnlinked: false.
+    //
+    // The Positioned(left/top: 0) wrapper is REQUIRED: as a direct overlay
+    // child, a bare follower would be laid out with tight full-screen
+    // constraints, stretching the opaque Listener across the whole screen and
+    // swallowing every tap (verses, app bar, back button). Positioning it gives
+    // the follower loose constraints so it shrinks to the dot's hit area, while
+    // the follower's own transform still places it over the anchor word.
+    return Positioned(
+      left: 0,
+      top: 0,
+      child: CompositedTransformFollower(
+        link: link,
+        showWhenUnlinked: false,
+        targetAnchor: isStart ? Alignment.bottomLeft : Alignment.bottomRight,
+        followerAnchor: Alignment.center,
+        child: Listener(
+          behavior: HitTestBehavior.opaque,
+          onPointerDown: (_) => onDragStart(),
+          onPointerMove: (e) => onDragUpdate(e.position),
+          onPointerUp: (_) => onDragEnd(),
+          onPointerCancel: (_) => onDragEnd(),
+          child: SizedBox(
+            width: _hitSize,
+            height: _hitSize,
+            child: Center(
+              child: Container(
+                width: _dotSize,
+                height: _dotSize,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary,
+                  shape: BoxShape.circle,
+                  boxShadow: const [
+                    BoxShadow(blurRadius: 2, color: Colors.black26),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _HighlightHandleState extends State<_HighlightHandle> {
-  Offset _position = Offset.zero;
-  bool _positioned = false;
+// ── Active-highlight action bar ───────────────────────────────────────────
+
+/// Compact, bottom-pinned bar shown while a highlight is active. Shows a single
+/// swatch of the current color that smoothly expands into the full palette;
+/// picking a color (or re-picking the same one) collapses it again. Also offers
+/// note and delete actions. Covers only a thin strip so the scripture above
+/// stays scrollable.
+class _HighlightActionBar extends StatefulWidget {
+  final Color initialColor;
+  final ValueChanged<Color> onRecolor;
+  final VoidCallback onNote;
+  final VoidCallback onDelete;
+
+  const _HighlightActionBar({
+    required this.initialColor,
+    required this.onRecolor,
+    required this.onNote,
+    required this.onDelete,
+  });
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _recalcPosition();
-  }
+  State<_HighlightActionBar> createState() => _HighlightActionBarState();
+}
 
-  void _recalcPosition() {
-    final ctx = widget.wordKey.currentContext;
-    if (ctx == null) return;
-    final box = ctx.findRenderObject() as RenderBox?;
-    if (box == null || !box.attached) return;
-    final global = box.localToGlobal(Offset.zero);
-    // Start handle anchors to bottom-left of first word.
-    // End handle anchors to bottom-right of last word.
-    final newPos = widget.isStart
-        ? Offset(global.dx - 6, global.dy + box.size.height - 6)
-        : Offset(global.dx + box.size.width - 6, global.dy + box.size.height - 6);
-    if (mounted) {
-      setState(() {
-        _position = newPos;
-        _positioned = true;
-      });
-    }
+class _HighlightActionBarState extends State<_HighlightActionBar> {
+  late Color _current = widget.initialColor;
+  bool _expanded = false;
+
+  static const _swatchSize = 30.0;
+  static const _paletteSwatchSize = 38.0;
+  static const _anim = Duration(milliseconds: 200);
+
+  void _pick(Color color) {
+    setState(() {
+      _current = color;
+      _expanded = false;
+    });
+    widget.onRecolor(color);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_positioned) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _recalcPosition();
-      });
-      return const SizedBox.shrink();
-    }
+    final theme = Theme.of(context);
     return Positioned(
-      left: _position.dx,
-      top: _position.dy,
-      child: Listener(
-        onPointerDown: (_) => widget.onDragStart(),
-        onPointerMove: (e) => widget.onDragUpdate(e.position),
-        onPointerUp: (_) => widget.onDragEnd(),
-        onPointerCancel: (_) => widget.onDragEnd(),
-        child: Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primary,
-            shape: BoxShape.circle,
-            boxShadow: const [
-              BoxShadow(blurRadius: 2, color: Colors.black26),
-            ],
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Palette that grows upward "over" the bar when expanded.
+            AnimatedSize(
+              duration: _anim,
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.bottomCenter,
+              child: _expanded
+                  ? Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: Material(
+                        elevation: 3,
+                        borderRadius: BorderRadius.circular(28),
+                        color: theme.colorScheme.surface,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              for (final color in HighlightColors.all)
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 6),
+                                  child: _Swatch(
+                                    color: color,
+                                    size: _paletteSwatchSize,
+                                    selected: color.toARGB32() ==
+                                        _current.toARGB32(),
+                                    onTap: () => _pick(color),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  : const SizedBox(width: double.infinity),
+            ),
+            // Main bar.
+            Material(
+              elevation: 8,
+              color: theme.colorScheme.surface,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 10, 12, 10),
+                child: Row(
+                  children: [
+                    // Current-color swatch — tap to expand the palette.
+                    _Swatch(
+                      color: _current,
+                      size: _swatchSize,
+                      selected: _expanded,
+                      onTap: () => setState(() => _expanded = !_expanded),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.sticky_note_2_outlined),
+                      tooltip: 'Note',
+                      onPressed: widget.onNote,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline),
+                      tooltip: 'Delete highlight',
+                      color: theme.colorScheme.error,
+                      onPressed: widget.onDelete,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A circular color swatch with an optional selection ring.
+class _Swatch extends StatelessWidget {
+  final Color color;
+  final double size;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _Swatch({
+    required this.color,
+    required this.size,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: selected
+                ? theme.colorScheme.primary
+                : theme.colorScheme.outlineVariant,
+            width: selected ? 2.5 : 1,
           ),
         ),
       ),

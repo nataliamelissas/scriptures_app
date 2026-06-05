@@ -143,8 +143,11 @@ class StudyNote {
     String? content,
     int? highlightColorValue,
     int? endVerseNumber,
+    bool clearEndVerseNumber = false,
     int? startWordIndex,
+    bool clearStartWordIndex = false,
     int? endWordIndex,
+    bool clearEndWordIndex = false,
   }) {
     return StudyNote(
       id: id,
@@ -156,9 +159,12 @@ class StudyNote {
       type: type,
       content: content ?? this.content,
       highlightColorValue: highlightColorValue ?? this.highlightColorValue,
-      endVerseNumber: endVerseNumber ?? this.endVerseNumber,
-      startWordIndex: startWordIndex ?? this.startWordIndex,
-      endWordIndex: endWordIndex ?? this.endWordIndex,
+      endVerseNumber:
+          clearEndVerseNumber ? null : (endVerseNumber ?? this.endVerseNumber),
+      startWordIndex:
+          clearStartWordIndex ? null : (startWordIndex ?? this.startWordIndex),
+      endWordIndex:
+          clearEndWordIndex ? null : (endWordIndex ?? this.endWordIndex),
       createdAt: createdAt,
     );
   }
