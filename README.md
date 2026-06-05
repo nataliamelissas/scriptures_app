@@ -135,7 +135,7 @@ Both are already in `.gitignore`.
 
 ## Firebase
 
-`firebase_core` is wired up as the foundation for future Auth, Firestore sync, and Storage features. No Firebase products are used at runtime yet beyond initialization.
+`firebase_core` is declared as the foundation for future Auth, Firestore sync, and Storage features. **`Firebase.initializeApp()` is not yet called** and no Firebase products are used at runtime — the SDK is wired into `pubspec.yaml` only.
 
 ### Configuration
 
@@ -146,12 +146,38 @@ dart pub global activate flutterfire_cli
 flutterfire configure
 ```
 
-This (re)generates:
+This (re)generates the following files, **all gitignored** with tracked `.example` templates committed in their place (run `flutterfire configure` to recreate the real files in a fresh clone):
 
-- `lib/firebase_options.dart` — non-secret platform identifiers. **Committed** to the repo so fresh clones work.
-- `android/app/google-services.json`, `ios/Runner/GoogleService-Info.plist`, `macos/Runner/GoogleService-Info.plist` — platform config files. **Gitignored** by convention; each developer regenerates them via `flutterfire configure`.
+| Generated file (gitignored) | Tracked template |
+|-----------------------------|------------------|
+| `lib/firebase_options.dart` | `lib/firebase_options.dart.example` |
+| `firebase.json` | `firebase.json.example` |
+| `android/app/google-services.json`, `ios/Runner/GoogleService-Info.plist`, `macos/Runner/GoogleService-Info.plist` | (none — regenerate per developer) |
+
+These files hold API keys and project identifiers. They're gitignored as **defense-in-depth**, but note: Firebase API keys ship inside client builds by design and are *not* true secrets — the real security boundary is **security rules + App Check + API-key restrictions** (see below), not hiding the keys.
 
 Re-run `flutterfire configure` whenever you add a new Firebase service or platform.
+
+### Security rules
+
+Deny-all defaults live in [`firestore.rules`](firestore.rules) and [`storage.rules`](storage.rules) (both tracked) and are referenced by `firebase.json`. They lock the database/bucket until access is granted explicitly per collection/path.
+
+Deploy them (requires `npm install -g firebase-tools`, `firebase login`, and the project selected):
+
+```bash
+firebase deploy --only firestore:rules
+firebase deploy --only storage
+```
+
+**Caveats:**
+
+- The rules files are the source of truth, not the live config — they do nothing until deployed.
+- Rules are **fail-closed**: once Firestore/Storage is wired up, every read/write returns *permission-denied* until you add explicit `match` grants. This is intended.
+- Never replace the deny-all with `allow read, write: if true;`.
+
+### App Check (deferred)
+
+Not yet wired up — intentionally. App Check requires `Firebase.initializeApp()` (absent), a reCAPTCHA v3 web site key, and per-product console enforcement, and protects nothing while no Firestore/Storage is in use. Add it alongside the first Firebase product, not before.
 
 ### New dependencies
 
@@ -159,9 +185,9 @@ Added in `pubspec.yaml`:
 
 | Package | Purpose |
 |---------|---------|
-| `firebase_core` | Initializes the Firebase SDK. Required by every other Firebase package. |
+| `firebase_core` | The Firebase SDK foundation. Required by every other Firebase package. |
 
-Future additions (not yet installed): `firebase_auth`, `cloud_firestore`, `firebase_storage`.
+Future additions (not yet installed): `firebase_auth`, `cloud_firestore`, `firebase_storage`, `firebase_app_check`.
 
 ## Architecture
 

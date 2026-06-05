@@ -76,6 +76,10 @@ wrangler deploy
 
 # Web app (after build)
 npx wrangler deploy
+
+# Firebase security rules (requires firebase-tools + firebase login)
+firebase deploy --only firestore:rules
+firebase deploy --only storage
 ```
 
 ## Critical Notes
@@ -97,7 +101,11 @@ npx wrangler deploy
 
 ### Firebase (Under Construction)
 
-Configured via FlutterFire CLI. Run `flutterfire configure` to regenerate platform files when adding services. Currently only `firebase_core` is initialized; Auth, Firestore sync, and Storage features are not yet implemented.
+Configured via FlutterFire CLI. Run `flutterfire configure` to regenerate platform files when adding services. `firebase_core` is declared but **`Firebase.initializeApp()` is not yet called**; Auth, Firestore sync, and Storage are not implemented.
+
+**Gitignored config (regenerate via `flutterfire configure`), tracked `.example` templates committed:** `lib/firebase_options.dart`, `firebase.json`, plus the platform files (`google-services.json`, `GoogleService-Info.plist`). These hold API keys/project IDs — kept out of the repo as defense-in-depth, though the real boundary is rules + App Check + key restrictions, since Firebase keys ship in client builds by design.
+
+**Security rules:** deny-all defaults in `firestore.rules` / `storage.rules` (tracked, referenced by `firebase.json`). Fail-closed: once a Firebase product is wired up, all reads/writes return *permission-denied* until explicit `match` grants are added. Deploy via the commands above. App Check is intentionally deferred until the first Firebase product is in use.
 
 ### Database Schema
 
