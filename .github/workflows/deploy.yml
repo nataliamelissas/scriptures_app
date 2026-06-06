@@ -30,6 +30,12 @@ jobs:
           channel: stable
           cache: true
 
+      # pubspec.yaml declares .env as an asset, but it is gitignored.
+      # The web build needs the file to exist; SCRIPTURE_BASE_PATH is a local
+      # path that does not apply on web (basePath falls back to '').
+      - name: Create .env from example
+        run: cp .env.example .env
+
       - name: Install dependencies
         run: flutter pub get
 
