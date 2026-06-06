@@ -26,8 +26,15 @@ class LocalScriptureConfig {
   static const envKey = 'SCRIPTURE_BASE_PATH';
 
   /// Reads the base path from the `.env` file at runtime.
-  /// Returns an empty string if the key is absent (graceful degradation).
-  static String get basePath => dotenv.env[envKey] ?? '';
+  ///
+  /// Returns an empty string when unavailable — on web (no local filesystem)
+  /// or when dotenv was never initialized — rather than letting
+  /// `dotenv.env` throw NotInitializedError, which would crash provider
+  /// construction before the API is ever queried.
+  static String get basePath {
+    if (kIsWeb || !dotenv.isInitialized) return '';
+    return dotenv.env[envKey] ?? '';
+  }
 }
 
 /// Database configuration.
