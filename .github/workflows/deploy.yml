@@ -1,0 +1,55 @@
+name: Deploy to GitHub Pages
+
+# Builds the Flutter web app and publishes it to GitHub Pages.
+# Pages source must be set to "GitHub Actions" (Settings -> Pages -> Source).
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# Required by actions/deploy-pages; no repository secrets are used.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one Pages deploy at a time; cancel superseded in-progress runs.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.41.6
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run tests
+        run: flutter test
+
+      # base-href must match the project page subpath: https://<user>.github.io/scriptures_app/
+      - name: Build web
+        run: flutter build web --release --base-href /scriptures_app/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
